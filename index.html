@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Audos</title>
+    <link rel="stylesheet" href="/src/themes/paper.css" />
+    <link rel="stylesheet" href="/src/themes/midnight.css" />
+    <link rel="stylesheet" href="/src/themes/nord.css" />
+    <link rel="stylesheet" href="/src/themes/glacier.css" />
+    <link rel="stylesheet" href="/src/themes/terminal.css" />
+
+  </head>
+  <body>
+    <video
+      id="app-bg-video"
+      autoplay
+      muted
+      loop
+      playsinline
+      preload="auto"
+    ></video>
+    <div id="app">
+      
+      <!-- Top Navigation Bar -->
+      <header id="top-bar">
+        <div class="top-left">
+          <img src="/icons/logo.svg" alt="Logo" class="brand-mark" />
+        </div>
+
+        <div class="top-center">
+          <button class="nav-btn home-btn" title="Home">
+            <img src="/icons/home.svg" alt="Home" />
+          </button>
+          <div class="search-bar">
+            <img src="/icons/search.svg" class="search-icon" alt="" />
+            <input type="text" placeholder="Search your local files..." />
+            <img src="/icons/clear.svg" class="clear-icon" alt="" />
+          </div>
+        </div>
+        
+        <div class="top-right">
+          <div class="profile-icon" id="profile-btn" title="Profile"></div>
+        </div>
+      </header>
+
+      <nav id="sidebar" class="panel">
+        <div class="library-header">
+          <h2>
+            <img src="/icons/library.svg" alt="" />
+            <span class="header-label">Your Library</span>
+          </h2>
+          <div class="library-actions">
+            <button id="refresh-lib-btn" title="Refresh Library">
+              <img src="/icons/refresh.svg" alt="" />
+            </button>
+            <button id="add-folder-btn" title="Add Folder">
+              <img src="/icons/add.svg" alt="" />
+            </button>
+            <button id="toggle-sidebar-btn" title="Collapse Library">
+              <img src="/icons/collapse.svg" alt="" />
+            </button>
+          </div>
+        </div>
+
+        <div class="library-filters">
+          <button class="chip active" data-tab="playlists">Playlists</button>
+          <button class="chip" data-tab="artists">Artists</button>
+          <button class="chip" data-tab="albums">Albums</button>
+        </div>
+
+        <div class="library-list">
+          <!-- Playlists will be dynamically injected -->
+        </div>
+      </nav>
+
+      <!-- Main Content Area -->
+      <main id="main-view" class="panel">
+        <div id="main-content-area">
+          <div class="empty-state">
+            <h2>Select a playlist or start searching</h2>
+            <p>Your music, mapped.</p>
+          </div>
+        </div>
+      </main>
+
+      <!-- Bottom Player Bar (card-style) -->
+      <footer id="player-bar">
+        <div class="player-backdrop" id="player-backdrop"></div>
+
+        <div class="player-content">
+          <!-- Left: now playing -->
+          <div class="now-playing" id="now-playing">
+            <div class="album-art" id="mini-album-art"></div>
+            <div class="track-info">
+              <p class="title" id="mini-title"></p>
+              <p class="artist" id="mini-artist"></p>
+            </div>
+            <button class="like-btn" id="btn-like" title="Like">
+              <img id="like-icon" src="/icons/check.svg" alt="" />
+            </button>
+          </div>
+
+          <!-- Center: transport + waveform -->
+          <div class="player-controls">
+            <div class="buttons">
+              <button class="ctrl-btn" id="btn-shuffle" title="Shuffle">
+                <img src="/icons/shuffle.svg" alt="" />
+              </button>
+              <button class="ctrl-btn" id="btn-prev" title="Previous">
+                <img src="/icons/prev.svg" alt="" />
+              </button>
+              <button class="play-btn" id="btn-play" title="Play">
+                <img src="/icons/play.svg" alt="" id="play-icon" />
+              </button>
+              <button class="ctrl-btn" id="btn-next" title="Next">
+                <img src="/icons/next.svg" alt="" />
+              </button>
+              <button class="ctrl-btn" id="btn-repeat" title="Repeat">
+                <img src="/icons/repeat.svg" alt="" />
+              </button>
+            </div>
+
+            <div class="playback-bar">
+              <span class="time time-current">0:00</span>
+              <div class="progress-bg" id="progress-bg">
+                <div class="progress-fill" id="progress-fill"></div>
+                <div class="progress-handle" id="progress-handle"></div>
+              </div>
+              <span class="time time-total">0:00</span>
+            </div>
+          </div>
+
+          <!-- Right: utility -->
+          <div class="extra-controls">
+            <button class="ctrl-btn" id="btn-queue" title="Queue">
+              <img src="/icons/queue.svg" alt="" />
+            </button>
+            <button class="ctrl-btn" id="btn-volume" title="Volume">
+              <img src="/icons/volume.svg" id="volume-icon" alt="" />
+            </button>
+            <div class="volume-bg">
+              <div class="volume-track"><div class="volume-fill"></div></div>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

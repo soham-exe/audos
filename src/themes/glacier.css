@@ -1,0 +1,220 @@
+/* ============================================================
+   Glacier theme — deep teal-slate, ice-mint accent, soft glow
+   Reference: cold, calm, low-light. Light passing through ice.
+   ============================================================ */
+body.theme-glacier {
+
+    --body-scrim-opacity: 0.35; 
+  /* ── Surfaces — deep teal-slate, not near-black ──── */
+  --bg:            #1a2a35;      /* still opaque — this is the outer gutter */
+  --panel:         rgba(31, 49, 61, 0.72);
+  --panel-strong:  rgba(38, 58, 71, 0.82);
+  --paper:         rgba(34, 51, 64, 0.72);
+
+  /* ── Text — soft off-white, never pure white ─────── */
+  --text:              #e2ecf0;
+  --text-dim:          #a3b5be;
+  --text-faint:        #7a8e9a;
+  --text-on-media:     #eaf3f6;
+  --text-on-media-dim: rgba(234, 243, 246, 0.68);
+  --text-on-media-mute:rgba(234, 243, 246, 0.4);
+
+  /* ── Accent — ice-mint, light through a glacier ──── */
+  --accent:        #7eccb8;
+  --accent-hover:  #95dcc9;
+  --accent-on-text:#0f1c26;
+
+  /* ── Lines — subtle, cool-tinted ─────────────────── */
+  --line:          rgba(226, 236, 240, 0.07);
+  --line-strong:   rgba(226, 236, 240, 0.14);
+  --line-ink:      rgba(126, 204, 184, 0.45);
+  --line-on-media: rgba(226, 236, 240, 0.14);
+
+  /* ── Selection — glacial highlight ───────────────── */
+  --selection-bg:           rgba(126, 204, 184, 0.10);
+  --selection-bg-hover:     rgba(126, 204, 184, 0.16);
+  --selection-bg-collapsed: rgba(126, 204, 184, 0.08);
+  --selection-border:       #7eccb8;
+  --selection-inner:        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --selection-text:         #7eccb8;
+  --selection-text-dim:     rgba(126, 204, 184, 0.72);
+
+  /* ── Icons — ice-tinted ──────────────────────────── */
+  --icon-filter:         brightness(0) saturate(100%) invert(78%) sepia(18%) saturate(500%) hue-rotate(120deg) brightness(95%);
+  --icon-filter-accent:  brightness(0) saturate(100%) invert(80%) sepia(30%) saturate(700%) hue-rotate(120deg) brightness(100%);
+  --icon-filter-inverse: brightness(0) saturate(100%) invert(92%) sepia(10%) saturate(300%) hue-rotate(160deg) brightness(95%);
+  --icon-filter-success: brightness(0) saturate(100%) invert(78%) sepia(30%) saturate(600%) hue-rotate(120deg) brightness(100%);
+  --icon-filter-muted:   brightness(0) saturate(100%) invert(60%) sepia(8%) saturate(300%) hue-rotate(160deg) brightness(90%);
+  --icon-opacity-dim:    0.72;
+  --icon-opacity-full:   1;
+
+  /* ── Semantic ────────────────────────────────────── */
+  --success: #7eccb8;
+  --warning: #e2b96a;
+  --danger:  #e07a6a;
+
+  /* ── Shadows — soft, blue-black, no harsh edges ──── */
+  --shadow-sm: 0 2px 6px rgba(0, 12, 18, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 12, 18, 0.45);
+  --shadow-lg: 0 8px 32px rgba(0, 12, 18, 0.55);
+  --shadow-on-media: 0 2px 8px rgba(0, 12, 18, 0.5);
+  --modal-shadow: 0 12px 48px rgba(0, 12, 18, 0.6);
+  --menu-shadow:  0 8px 24px rgba(0, 12, 18, 0.45);
+  --menu-shadow-lg: 0 8px 32px rgba(0, 12, 18, 0.5);
+
+  /* ── Player card — soft luminous backdrop ────────── */
+  --player-bg:                    rgba(31, 49, 61, 0.78);
+  --player-blur:                  24px;
+  --player-saturate:              1.5;
+  --player-backdrop-blur:         64px;
+  --player-backdrop-saturate:     1.6;
+  --player-backdrop-brightness:   0.42;
+  --player-backdrop-scrim:        linear-gradient(
+                                    180deg,
+                                    rgba(15, 28, 38, 0.35) 0%,
+                                    rgba(15, 28, 38, 0.65) 100%
+                                  );
+
+  /* ── Component-specific ──────────────────────────── */
+  --accent-bg-faint:  rgba(126, 204, 184, 0.08);
+  --overlay-scrim:    rgba(10, 20, 28, 0.72);
+  --queue-current-bg: rgba(126, 204, 184, 0.10);
+
+  /* ── Progress bar — the signature glow ───────────── */
+  --progress-height:        3px;
+  --progress-height-hover:  5px;
+  --progress-radius:        999px;
+  --progress-track-bg:      rgba(226, 236, 240, 0.10);
+  --progress-track-bg-idle: rgba(226, 236, 240, 0.14);
+  --progress-fill-bg:       #7eccb8;
+  --progress-fill-bg-idle:  #7eccb8;
+  --progress-handle-size:   10px;
+
+  /* ── Volume — matching accent, thin ──────────────── */
+  --volume-height:        3px;
+  --volume-height-hover:  5px;
+
+  /* ── Structure — soft, medium-radius, generous ───── */
+  --panel-border-width:      1px;
+  --panel-border-style:      solid;
+  --panel-radius:            10px;
+  --album-card-radius:       12px;
+  --album-art-radius:        10px;
+  --player-radius:           14px;
+  --play-btn-radius:         999px;
+  --ctrl-btn-radius:         999px;
+  --modal-radius:            12px;
+
+  /* ── Typography — keep defaults, cool them slightly ─ */
+  --fs-base: 14px;
+  --fs-md:   13.5px;
+
+  /* grid gaps and radius */
+  --gap: 0px;
+  --panel-radius: 0px;
+}
+
+/* ============================================================
+   GLOW KIT — the signature luminous edges
+   These cannot be expressed as tokens, so they live here.
+   ============================================================ */
+
+/* Progress bar — glowing ice bar when a track is playing */
+body.theme-glacier #player-bar.has-track .progress-fill {
+  box-shadow:
+    0 0 6px rgba(126, 204, 184, 0.75),
+    0 0 14px rgba(126, 204, 184, 0.35);
+}
+
+/* Progress bar — softer glow on hover */
+body.theme-glacier #player-bar.has-track .progress-bg:hover .progress-fill {
+  box-shadow:
+    0 0 8px rgba(126, 204, 184, 0.9),
+    0 0 20px rgba(126, 204, 184, 0.45);
+}
+
+/* Play button — inner + outer glow, always on */
+body.theme-glacier .play-btn {
+  background: #7eccb8;
+  box-shadow:
+    0 0 12px rgba(126, 204, 184, 0.35),
+    0 0 28px rgba(126, 204, 184, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+body.theme-glacier .play-btn:hover {
+  box-shadow:
+    0 0 16px rgba(126, 204, 184, 0.55),
+    0 0 36px rgba(126, 204, 184, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* Play button icon — dark, so it reads on the mint fill */
+body.theme-glacier .play-btn img {
+  filter: brightness(0) saturate(100%) invert(9%) sepia(20%) saturate(800%) hue-rotate(150deg) brightness(90%);
+}
+
+/* Active control buttons (shuffle on, repeat on) — accent + soft glow */
+body.theme-glacier .buttons .ctrl-btn.active img {
+  filter: var(--icon-filter-accent);
+  filter:
+    brightness(0) saturate(100%)
+    invert(80%) sepia(30%) saturate(700%)
+    hue-rotate(120deg) brightness(100%)
+    drop-shadow(0 0 4px rgba(126, 204, 184, 0.55));
+}
+
+/* Active sidebar tab chips — glow underline */
+body.theme-glacier .chip.active {
+  background: rgba(126, 204, 184, 0.12);
+  color: #7eccb8;
+  border-color: rgba(126, 204, 184, 0.4);
+  box-shadow:
+    0 0 0 1px rgba(126, 204, 184, 0.15),
+    0 0 12px rgba(126, 204, 184, 0.15);
+}
+
+/* Selected playlist row — glowing left border */
+body.theme-glacier .list-item.selected {
+  box-shadow:
+    -2px 0 8px rgba(126, 204, 184, 0.25),
+    var(--selection-inner);
+}
+
+/* Currently playing queue item — matching glow */
+body.theme-glacier .q-item--current {
+  box-shadow: -2px 0 10px rgba(126, 204, 184, 0.3);
+}
+
+/* Liked heart when active — glowing accent */
+body.theme-glacier .like-btn img.liked {
+  filter:
+    brightness(0) saturate(100%)
+    invert(80%) sepia(30%) saturate(700%)
+    hue-rotate(120deg) brightness(100%)
+    drop-shadow(0 0 5px rgba(126, 204, 184, 0.6));
+  opacity: 1;
+}
+
+/* Subtle inner top-light on panels — glacial depth */
+body.theme-glacier .panel {
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.02) 0%,
+    transparent 40%
+  );
+}
+
+/* Album art gets a soft inner shadow so it sits on the card */
+body.theme-glacier .album-card .album-art {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    var(--shadow-sm);
+}
+
+/* Player card now-playing album art — subtle ring */
+body.theme-glacier .now-playing .album-art {
+  box-shadow:
+    0 0 0 1px rgba(126, 204, 184, 0.15),
+    var(--shadow-on-media);
+}

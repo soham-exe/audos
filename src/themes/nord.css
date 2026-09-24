@@ -1,0 +1,49 @@
+body.theme-nord {
+  --bg:            #2e3440;
+  --panel:         #3b4252;
+  --panel-strong:  #434c5e;
+  --paper:         #353c4a;
+
+  --text:              #eceff4;
+  --text-dim:          #d8dee9;
+  --text-faint:        #7b8594;
+  --text-on-media:     #eceff4;
+  --text-on-media-dim: rgba(236, 239, 244, 0.75);
+  --text-on-media-mute:rgba(236, 239, 244, 0.4);
+
+  --accent:        #88c0d0;
+  --accent-hover:  #9fd0dd;
+  --accent-on-text:#2e3440;
+
+  --line:          rgba(236, 239, 244, 0.08);
+  --line-strong:   rgba(236, 239, 244, 0.18);
+  --line-ink:      rgba(236, 239, 244, 0.4);
+  --line-on-media: rgba(236, 239, 244, 0.2);
+
+  --selection-bg:           rgba(136, 192, 208, 0.25);
+  --selection-bg-hover:     rgba(136, 192, 208, 0.4);
+  --selection-bg-collapsed: rgba(136, 192, 208, 0.2);
+  --selection-border:       #88c0d0;
+  --selection-inner:        inset 0 1px 0 rgba(236, 239, 244, 0.08);
+  --selection-text:         #eceff4;
+  --selection-text-dim:     rgba(236, 239, 244, 0.7);
+
+  --icon-filter:         brightness(0) saturate(100%) invert(85%) sepia(8%) saturate(200%) hue-rotate(190deg) brightness(95%);
+  --icon-filter-accent:  brightness(0) saturate(100%) invert(75%) sepia(40%) saturate(400%) hue-rotate(160deg) brightness(100%);
+  --icon-filter-inverse: invert(0.2);
+  --icon-filter-success: brightness(0) saturate(100%) invert(70%) sepia(50%) saturate(500%) hue-rotate(80deg);
+  --icon-filter-muted:   invert(0.65);
+
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-on-media: 0 2px 8px rgba(0, 0, 0, 0.4);
+
+  --player-bg: rgba(59, 66, 82, 0.7);
+  --player-backdrop-brightness: 0.4;
+  --player-backdrop-scrim: linear-gradient(180deg, rgba(46,52,64,0.4) 0%, rgba(46,52,64,0.65) 100%);
+
+  --accent-bg-faint: rgba(136, 192, 208, 0.10);
+  --overlay-scrim:   rgba(0, 0, 0, 0.5);
+  --queue-current-bg: rgba(136, 192, 208, 0.10);
+}

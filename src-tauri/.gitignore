@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Rust build
+src-tauri/target/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tauri / updater signing keys — NEVER commit
+*.key
+*.key.pub
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log

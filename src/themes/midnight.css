@@ -1,0 +1,602 @@
+/* ============================================================
+   Midnight theme — warm orange dark, cinematic layered
+   Reference: dark automotive player, translucent panels floating
+   over an ambient hero. Warm orange accent, deep near-black.
+   ============================================================ */
+body.theme-midnight {
+  /* ── Surfaces — deep, translucent ─────────────── */
+  --bg:            #0a0a0c;
+  --panel:         rgba(23, 23, 25, 0.62);
+  --panel-strong:  rgba(33, 33, 36, 0.78);
+  --paper:         rgba(30, 30, 33, 0.62);
+
+  /* ── Text ─────────────────────────────────────── */
+  --text:              #f0f0f0;
+  --text-dim:          #a0a0a0;
+  --text-faint:        #666666;
+  --text-on-media:     #ffffff;
+  --text-on-media-dim: rgba(255, 255, 255, 0.7);
+  --text-on-media-mute:rgba(255, 255, 255, 0.4);
+
+  /* ── Accent — warm orange ─────────────────────── */
+  --accent:        #ff5e3a;
+  --accent-hover:  #ff7454;
+  --accent-on-text:#1a1a1a;
+
+  /* ── Lines — subtle ───────────────────────────── */
+  --line:          rgba(255, 255, 255, 0.08);
+  --line-strong:   rgba(255, 255, 255, 0.16);
+  --line-ink:      rgba(255, 255, 255, 0.40);
+  --line-on-media: rgba(255, 255, 255, 0.16);
+
+  /* ── Selection — warm orange tint ─────────────── */
+  --selection-bg:           rgba(255, 94, 58, 0.10);
+  --selection-bg-hover:     rgba(255, 94, 58, 0.16);
+  --selection-bg-collapsed: rgba(255, 94, 58, 0.08);
+  --selection-border:       #ff5e3a;
+  --selection-inner:        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --selection-text:         #ff5e3a;
+  --selection-text-dim:     rgba(255, 94, 58, 0.7);
+
+  /* ── Icons — warm-tinted ──────────────────────── */
+  --icon-filter:         brightness(0) saturate(100%) invert(75%) sepia(4%) saturate(200%) hue-rotate(180deg) brightness(95%);
+  --icon-filter-accent:  brightness(0) saturate(100%) invert(52%) sepia(70%) saturate(1800%) hue-rotate(330deg) brightness(100%) contrast(90%);
+  --icon-filter-inverse: invert(0.15);
+  --icon-filter-success: brightness(0) saturate(100%) invert(60%) sepia(70%) saturate(500%) hue-rotate(80deg);
+  --icon-filter-muted:   invert(0.7);
+  --icon-opacity-dim:    0.72;
+  --icon-opacity-full:   1;
+
+  /* ── Semantic ─────────────────────────────────── */
+  --success: #1db954;
+  --warning: #e2a000;
+  --danger:  #ff5e3a;
+
+  /* ── Typography — keep defaults ───────────────── */
+  --font-display: 'Archivo Black', Impact, sans-serif;
+  --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+  --font-body:    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  --fs-xs:   10.5px;
+  --fs-sm:   12px;
+  --fs-base: 14px;
+  --fs-md:   13.5px;
+  --fs-lg:   16px;
+  --fs-xl:   22px;
+  --fs-2xl:  26px;
+  --fs-3xl:  32px;
+
+  /* ── Spacing ──────────────────────────────────── */
+  --gap:       0px;
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  12px;
+  --space-lg:  16px;
+  --space-xl:  24px;
+  --space-2xl: 32px;
+  --space-3xl: 40px;
+
+  /* ── Radius — soft ────────────────────────────── */
+  --radius:      6px;
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-pill: 999px;
+
+  /* ── Motion ───────────────────────────────────── */
+  --ease:       cubic-bezier(0.2, 0, 0, 1);
+  --dur:        160ms;
+  --dur-fast:   100ms;
+  --dur-slow:   260ms;
+  --dur-slower: 400ms;
+
+  /* ── Shadows ──────────────────────────────────── */
+  --shadow-sm:      0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.6);
+  --shadow-on-media: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --modal-shadow:   0 20px 60px rgba(0, 0, 0, 0.7);
+  --menu-shadow:    0 8px 28px rgba(0, 0, 0, 0.55);
+  --menu-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.65);
+
+  /* ── Body scrim — off, panels are translucent ─── */
+  --body-scrim-opacity: 0.0;
+
+  /* ── Player card — soft dark translucency ─────── */
+  --player-bg:                  rgba(23, 23, 25, 0.55);
+  --player-blur:                24px;
+  --player-saturate:            1.4;
+  --player-backdrop-blur:       60px;
+  --player-backdrop-saturate:   1.4;
+  --player-backdrop-brightness: 0.35;
+  --player-backdrop-scrim:      linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.65) 100%);
+
+  /* ── Overlays / current-track backgrounds ─────── */
+  --accent-bg-faint:  rgba(255, 94, 58, 0.10);
+  --overlay-scrim:    rgba(0, 0, 0, 0.6);
+  --queue-current-bg: rgba(255, 94, 58, 0.10);
+
+  /* ── Playlist thumbnail gradients ─────────────── */
+  --thumb-gradient-liked:     linear-gradient(135deg, #ff5e3a, #ff8a6a);
+  --thumb-gradient-downloads: linear-gradient(135deg, #3a6eff, #6a8aff);
+  --thumb-gradient-folder:    linear-gradient(135deg, #4aa87a, #78c8a0);
+
+  /* ── Layout dimensions ────────────────────────── */
+  --sidebar-width:     300px;
+  --sidebar-collapsed: 64px;
+  --queue-width:       320px;
+  --header-height:     56px;
+  --player-height:     92px;
+  --sidebar-padding:   20px 18px;
+  --main-padding:      32px 36px;
+  --topbar-padding:    0 24px;
+
+  /* ── Panel shell — no borders, just translucency ─ */
+  --panel-border-width: 0px;
+  --panel-border-style: solid;
+  --panel-radius:       0px;
+
+  /* ── Sidebar list items ───────────────────────── */
+  --list-item-padding:        8px 6px;
+  --list-item-padding-active: 8px;
+  --list-item-gap:            12px;
+  --list-item-border-width:   0px;
+  --list-item-border-style:   solid;
+  --item-img-size:            40px;
+  --item-img-radius:          6px;
+  --selection-border-width:   0px;
+
+  /* ── Track rows — table-like ──────────────────── */
+  --track-row-height:      52px;
+  --track-row-gap-y:       0px;
+  --track-row-padding:      10px 14px;
+  --track-row-thumb-size:  36px;
+  --track-thumb-radius:    4px;
+  --track-list-margin-top: 0px;
+  --track-index-width:     28px;
+  --track-index-margin:    16px;
+
+  /* ── Album cards — soft frosted ───────────────── */
+  --album-card-padding:      12px;
+  --album-card-radius:       10px;
+  --album-card-border-width: 0px;
+  --album-card-border-style: solid;
+  --album-card-gap:          16px;
+  --album-card-min-width:    180px;
+  --album-art-radius:        6px;
+  --album-art-margin-bottom: 12px;
+
+  /* ── Quick grid ───────────────────────────────── */
+  --quick-item-height:  56px;
+  --quick-grid-columns: 4;
+
+  /* ── Queue items ──────────────────────────────── */
+  --q-item-padding:            8px 10px;
+  --q-item-radius:             6px;
+  --q-item-border-left-width:  3px;
+  --q-item-gap:                10px;
+  --q-thumb-size:              36px;
+  --queue-panel-padding:       16px;
+
+  /* ── Player bar ───────────────────────────────── */
+  --player-border-width:       0px;
+  --player-border-style:       solid;
+  --player-radius:             0px;
+  --player-padding:            0 24px;
+  --player-content-gap:        24px;
+  --player-backdrop-inset:     -40px;
+  --now-playing-thumb-size:    48px;
+  --now-playing-thumb-radius:  6px;
+  --play-btn-size:             44px;
+  --play-btn-radius:           999px;
+  --ctrl-btn-size:             34px;
+  --ctrl-btn-radius:           999px;
+  --extra-btn-size:            30px;
+
+  /* ── Progress + volume ────────────────────────── */
+  --progress-height:        3px;
+  --progress-height-hover:  5px;
+  --progress-radius:        999px;
+  --progress-track-bg:      rgba(255, 255, 255, 0.16);
+  --progress-track-bg-idle: rgba(255, 255, 255, 0.2);
+  --progress-fill-bg:       #ff5e3a;
+  --progress-fill-bg-idle:  #ff5e3a;
+  --progress-handle-size:   10px;
+  --volume-track-width:     90px;
+  --volume-height:          3px;
+  --volume-height-hover:    5px;
+
+  /* ── Modal ────────────────────────────────────── */
+  --modal-min-width:     340px;
+  --modal-padding:       24px;
+  --modal-radius:        12px;
+  --modal-border-width:  0px;
+  --modal-input-padding: 10px 14px;
+
+  /* ── Context menu ─────────────────────────────── */
+  --context-menu-min-width:         200px;
+  --context-menu-profile-min-width: 220px;
+  --context-menu-padding:           6px 0;
+  --context-menu-row-padding:       9px 18px;
+
+  /* ── Refresh / feed ───────────────────────────── */
+  --refresh-btn-top:        24px;
+  --refresh-btn-right:      32px;
+  --refresh-btn-size:       32px;
+  --empty-state-min-height: 340px;
+
+  /* ── Scrollbar ────────────────────────────────── */
+  --scrollbar-thumb:       rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+  --scrollbar-track:       transparent;
+  --scrollbar-border:      rgba(23, 23, 25, 0.9);
+
+  /* ── Extras ───────────────────────────────────── */
+  --overlay-blur: none;
+}
+
+
+
+/* ============================================================
+   MIDNIGHT EXTRAS — cinematic layered treatment
+   ============================================================ */
+
+/* ── App background — deep ambient gradient ─────── */
+body.theme-midnight {
+  background:
+    radial-gradient(
+      ellipse 120% 80% at 50% 0%,
+      rgba(255, 94, 58, 0.06) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 100% 100% at 0% 100%,
+      rgba(60, 80, 160, 0.08) 0%,
+      transparent 60%
+    ),
+    linear-gradient(
+      160deg,
+      #0a0a0c 0%,
+      #101014 45%,
+      #0e0e14 100%
+    );
+  background-attachment: fixed;
+}
+
+/* ── Frosted glass panes ─────────────────────────── */
+body.theme-midnight .panel {
+  backdrop-filter: blur(32px) saturate(1.6);
+  -webkit-backdrop-filter: blur(32px) saturate(1.6);
+  border: none;
+  border-right: 1px solid var(--line);
+}
+body.theme-midnight #main-view.panel {
+  border-right: none;
+}
+body.theme-midnight #top-bar {
+  backdrop-filter: blur(32px) saturate(1.6);
+  -webkit-backdrop-filter: blur(32px) saturate(1.6);
+  border: none;
+  border-bottom: 1px solid var(--line);
+}
+
+/* ── Track rows — hairline table ─────────────────── */
+body.theme-midnight .track-list {
+  margin-top: 0;
+}
+body.theme-midnight .track-list > div {
+  background: transparent !important;
+  border-bottom: 1px solid var(--line) !important;
+  border-radius: 0 !important;
+}
+body.theme-midnight .track-list > div:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+body.theme-midnight .track-row {
+  background: transparent;
+  border-radius: 6px;
+  transition: background 120ms var(--ease);
+}
+body.theme-midnight .track-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Currently playing — warm tint + left accent bar */
+body.theme-midnight .track-row--playing {
+  background: var(--selection-bg);
+  position: relative;
+}
+body.theme-midnight .track-row--playing::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12%;
+  bottom: 12%;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+body.theme-midnight .track-row--playing .track-row-index {
+  color: var(--accent);
+  font-weight: 600;
+}
+body.theme-midnight .track-row--playing .track-row-title-row span {
+  color: var(--accent);
+}
+
+/* Index numbers — mid-gray mono */
+body.theme-midnight .track-row-index {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+/* Track titles — semibold */
+body.theme-midnight .track-row-title-row span {
+  font-weight: 500;
+  font-size: 13.5px;
+  letter-spacing: -0.005em;
+}
+
+/* Metadata — mono for the reference's tech feel */
+body.theme-midnight .track-row-subtitle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 1px;
+  letter-spacing: 0.02em;
+}
+
+body.theme-midnight .track-row-thumb {
+  border-radius: 4px;
+}
+
+/* ── Sidebar ─────────────────────────────────────── */
+body.theme-midnight .list-item {
+  border-radius: 8px;
+  padding: 8px 8px;
+  border-bottom: none;
+  transition: background 140ms var(--ease);
+}
+body.theme-midnight .list-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+body.theme-midnight .list-item.selected {
+  background: var(--selection-bg);
+  border-left: none;
+  padding-left: 8px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+/* ── Section headers ─────────────────────────────── */
+body.theme-midnight .section-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--text);
+}
+
+/* ── Chips ───────────────────────────────────────── */
+body.theme-midnight .chip {
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  border-color: var(--line);
+  color: var(--text-dim);
+  background: transparent;
+}
+body.theme-midnight .chip:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+body.theme-midnight .chip.active {
+  background: var(--accent);
+  color: var(--accent-on-text);
+  border-color: var(--accent);
+}
+
+/* ── Library header ──────────────────────────────── */
+body.theme-midnight .library-header h2 {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* ── Album cards — frosted glass ─────────────────── */
+body.theme-midnight .album-card {
+  background: rgba(30, 30, 33, 0.28);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  transition: transform 160ms var(--ease),
+              box-shadow 160ms var(--ease),
+              background 160ms var(--ease);
+}
+body.theme-midnight .album-card:hover {
+  background: rgba(30, 30, 33, 0.55);
+  border-color: var(--line-strong);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Player bar ──────────────────────────────────── */
+body.theme-midnight #player-bar {
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  backdrop-filter: blur(32px) saturate(1.6);
+  -webkit-backdrop-filter: blur(32px) saturate(1.6);
+}
+
+/* ── Play button — orange filled pill ────────────── */
+body.theme-midnight .play-btn {
+  background: var(--accent);
+  box-shadow: 0 2px 10px rgba(255, 94, 58, 0.3);
+}
+body.theme-midnight .play-btn:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 4px 16px rgba(255, 94, 58, 0.45);
+}
+body.theme-midnight .play-btn img {
+  filter: brightness(0) saturate(100%) invert(100%);
+}
+body.theme-midnight #player-bar:not(.has-track) .play-btn {
+  background: var(--accent);
+}
+body.theme-midnight #player-bar:not(.has-track) .play-btn img {
+  filter: brightness(0) saturate(100%) invert(100%);
+}
+
+/* ── Progress + volume ───────────────────────────── */
+body.theme-midnight .progress-fill {
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(255, 94, 58, 0.4);
+}
+body.theme-midnight #player-bar:not(.has-track) .volume-fill {
+  background: var(--text);
+}
+
+/* ── Queue panel ─────────────────────────────────── */
+body.theme-midnight #queue-panel {
+  backdrop-filter: blur(32px) saturate(1.6);
+  -webkit-backdrop-filter: blur(32px) saturate(1.6);
+  border: none;
+  border-left: 1px solid var(--line);
+}
+
+/* ── Modals ──────────────────────────────────────── */
+body.theme-midnight .modal-card {
+  background: rgba(23, 23, 25, 0.92);
+  backdrop-filter: blur(32px) saturate(1.6);
+  -webkit-backdrop-filter: blur(32px) saturate(1.6);
+}
+
+/* ── Context menu ────────────────────────────────── */
+body.theme-midnight .context-menu {
+  background: rgba(23, 23, 25, 0.94);
+  backdrop-filter: blur(32px) saturate(1.6);
+  -webkit-backdrop-filter: blur(32px) saturate(1.6);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+body.theme-midnight .context-menu-row {
+  border-radius: 6px;
+  margin: 0 6px;
+  padding: 8px 12px;
+}
+body.theme-midnight .context-menu-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ── Quick access tiles — hidden ─────────────────── */
+body.theme-midnight .quick-grid {
+  display: none;
+}
+
+
+/* ============================================================
+   Player bar — unified with the rest of the app.
+   No album-art backdrop, no has-track personality switch.
+   Same treatment whether a track is loaded or not.
+   ============================================================ */
+
+/* Kill the blurred album-art backdrop entirely */
+body.theme-midnight .player-backdrop {
+  display: none;
+}
+
+/* Player bar uses the panel background — same as sidebar / main / queue */
+body.theme-midnight #player-bar {
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  backdrop-filter: blur(32px) saturate(1.6);
+  -webkit-backdrop-filter: blur(32px) saturate(1.6);
+}
+
+/* Text always uses the normal text colors — not the on-media ones */
+body.theme-midnight #player-bar .now-playing .title,
+body.theme-midnight #player-bar.has-track .now-playing .title {
+  color: var(--text);
+}
+
+body.theme-midnight #player-bar .now-playing .artist,
+body.theme-midnight #player-bar.has-track .now-playing .artist {
+  color: var(--text-faint);
+  opacity: 1;
+}
+
+body.theme-midnight #player-bar .playback-bar .time,
+body.theme-midnight #player-bar.has-track .playback-bar .time {
+  color: var(--text-faint);
+}
+
+/* Icons — normal filter when idle, orange when active */
+body.theme-midnight #player-bar .buttons .ctrl-btn img,
+body.theme-midnight #player-bar.has-track .buttons .ctrl-btn img,
+body.theme-midnight #player-bar .extra-controls .ctrl-btn img,
+body.theme-midnight #player-bar.has-track .extra-controls .ctrl-btn img {
+  filter: var(--icon-filter);
+}
+
+body.theme-midnight #player-bar .buttons .ctrl-btn.active img,
+body.theme-midnight #player-bar.has-track .buttons .ctrl-btn.active img {
+  filter: brightness(0) saturate(100%)
+          invert(52%) sepia(95%) saturate(3500%)
+          hue-rotate(334deg) brightness(108%) contrast(93%);
+}
+
+/* Play button — orange fill stays (that's the design), dark icon */
+body.theme-midnight #player-bar .play-btn,
+body.theme-midnight #player-bar.has-track .play-btn {
+  background: var(--accent);
+}
+body.theme-midnight #player-bar .play-btn img,
+body.theme-midnight #player-bar.has-track .play-btn img {
+  filter: brightness(0) saturate(100%) invert(8%) sepia(20%) saturate(500%) brightness(95%);
+}
+
+/* Progress bar — orange fill, normal track color, always */
+body.theme-midnight #player-bar .progress-bg,
+body.theme-midnight #player-bar.has-track .progress-bg {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+body.theme-midnight #player-bar .progress-fill,
+body.theme-midnight #player-bar.has-track .progress-fill {
+  background-color: var(--accent);
+}
+
+/* Volume bar */
+body.theme-midnight #player-bar .volume-track,
+body.theme-midnight #player-bar.has-track .volume-track {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+body.theme-midnight #player-bar .volume-fill,
+body.theme-midnight #player-bar.has-track .volume-fill {
+  background-color: var(--text);
+}
+
+/* Mini album art — same treatment regardless of has-track */
+body.theme-midnight #player-bar .now-playing .album-art {
+  background-color: var(--panel-strong);
+  box-shadow: none;
+  border-radius: var(--now-playing-thumb-radius);
+}
+
