@@ -8,18 +8,60 @@ import { relaunch } from '@tauri-apps/plugin-process';
 // ==========================================
 // Theme System
 // ==========================================
-type ThemeName = 'paper' | 'midnight' | 'nord' |'terminal'|'glacier';
+type ThemeName = 'paper' | 'midnight' | 'nord' | 'terminal' | 'glacier';
 
+// ── Bundled theme backgrounds ─────────────────
+// Value can be an image (.jpg/.png/.webp) or a video (.mp4/.webm).
+const BUNDLED_THEME_BACKGROUNDS: Partial<Record<ThemeName, string>> = {
+    midnight: '/bg/midnight.mp4',
+    glacier: '/bg/midnight.mp4',
+};
+
+function isVideoPath(path: string): boolean {
+    const ext = path.toLowerCase().split('.').pop() || '';
+    return ['mp4', 'webm', 'mov', 'm4v', 'ogv'].includes(ext);
+}
+
+function applyThemeBackground(theme: ThemeName) {
+    if (localStorage.getItem('app_background_path')) return;
+
+    const video = document.getElementById('app-bg-video') as HTMLVideoElement | null;
+
+    if (video) {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+    }
+    document.body.classList.remove('has-bg-video');
+    document.body.style.backgroundImage = 'none';
+
+    const src = BUNDLED_THEME_BACKGROUNDS[theme];
+    if (!src) return;
+
+    if (isVideoPath(src)) {
+        if (!video) return;
+        video.src = src;
+        document.body.classList.add('has-bg-video');
+        video.play().catch(e => console.warn('[bg-video] autoplay blocked:', e));
+    } else {
+        document.body.style.backgroundImage = `url('${src}')`;
+    }
+}
+
+// ── Theme loader ──────────────────────────────
 function loadTheme(name: ThemeName) {
     document.body.classList.remove('theme-paper', 'theme-midnight', 'theme-nord','theme-terminal','theme-glacier');
     document.body.classList.add(`theme-${name}`);
     localStorage.setItem('theme', name);
     const sel = document.getElementById('theme-select') as HTMLSelectElement | null;
     if (sel) sel.value = name;
+    applyThemeBackground(name);
 }
 
+// ── Boot ──────────────────────────────────────
 const savedTheme = (localStorage.getItem('theme') as ThemeName) || 'paper';
 loadTheme(savedTheme);
+
 
 // ==========================================
 // Auto-update system
@@ -2055,7 +2097,11 @@ function loadAppBackground() {
     document.body.classList.remove('has-bg-video');
     document.body.style.backgroundImage = 'none';
 
-    if (!savedPath) return;
+    if (!savedPath) {
+        // No user override — let the theme decide
+        applyThemeBackground(savedTheme);
+        return;
+    }
 
     if (isVideoFile(savedPath)) {
         if (!video) return;

@@ -4,7 +4,8 @@
    ============================================================ */
 body.theme-glacier {
 
-    --body-scrim-opacity: 0.35; 
+    --body-scrim-opacity: 0.35;
+    --body-scrim-opacity-video: 0.0; 
   /* ── Surfaces — deep teal-slate, not near-black ──── */
   --bg:            #1a2a35;      /* still opaque — this is the outer gutter */
   --panel:         rgba(31, 49, 61, 0.72);

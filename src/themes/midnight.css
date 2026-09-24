@@ -101,6 +101,7 @@ body.theme-midnight {
 
   /* ── Body scrim — off, panels are translucent ─── */
   --body-scrim-opacity: 0.0;
+  --body-scrim-opacity-video: 0.4;
 
   /* ── Player card — soft dark translucency ─────── */
   --player-bg:                  rgba(23, 23, 25, 0.55);
