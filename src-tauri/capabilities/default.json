@@ -12,6 +12,8 @@
     "dialog:allow-open",
     "dialog:allow-confirm",
     "dialog:allow-message",
-    "dialog:allow-ask"
+    "dialog:allow-ask",
+    "updater:default",
+    "process:allow-restart"
   ]
 }
