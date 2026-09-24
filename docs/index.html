@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audos — Your music, mapped.</title>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #ece8de;
+            color: #17140f;
+            line-height: 1.5;
+            display: flex;
+            min-height: 100vh;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+        .wrap {
+            max-width: 640px;
+            width: 100%;
+        }
+        h1 {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 64px;
+            letter-spacing: -0.04em;
+            line-height: 1;
+            margin-bottom: 16px;
+        }
+        .tag {
+            font-size: 20px;
+            color: #6b6255;
+            margin-bottom: 40px;
+        }
+        .download {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: #d8432e;
+            color: #fff;
+            text-decoration: none;
+            padding: 18px 36px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.15s ease, background 0.15s ease;
+        }
+        .download:hover {
+            background: #bf3824;
+            transform: translateY(-1px);
+        }
+        .version {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            color: #9a9184;
+            margin-top: 12px;
+        }
+        .links {
+            margin-top: 48px;
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+        .links a {
+            color: #17140f;
+            text-decoration: none;
+            border-bottom: 1px solid rgba(23,20,15,0.2);
+            padding-bottom: 2px;
+            font-size: 14px;
+        }
+        .links a:hover { border-bottom-color: #17140f; }
+        .features {
+            margin-top: 64px;
+            border-top: 1px solid rgba(23,20,15,0.1);
+            padding-top: 32px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+        }
+        .feat {
+            font-size: 14px;
+        }
+        .feat strong {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .feat span { color: #6b6255; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>Audos</h1>
+        <p class="tag">Your music, mapped.</p>
+
+        <a class="download"
+           href="https://github.com/soham-exe/audos/releases/latest/download/Audos_0.1.2_x64-setup.exe">
+            ↓ Download for Windows
+        </a>
+        <p class="version">Latest release · <a href="https://github.com/soham-exe/audos/releases/latest" style="color: inherit;">view all versions</a></p>
+
+        <div class="links">
+            <a href="https://github.com/soham-exe/audos">GitHub</a>
+            <a href="https://github.com/soham-exe/audos/blob/main/THEMES.md">Themes</a>
+            <a href="https://github.com/soham-exe/audos/issues">Report a bug</a>
+        </div>
+
+        <div class="features">
+            <div class="feat"><strong>Local + YouTube</strong><span>One library for both.</span></div>
+            <div class="feat"><strong>Five themes</strong><span>Or write your own.</span></div>
+            <div class="feat"><strong>Auto-updates</strong><span>Signed and verified.</span></div>
+            <div class="feat"><strong>No telemetry</strong><span>Yours alone.</span></div>
+        </div>
+    </div>
+</body>
+</html>
