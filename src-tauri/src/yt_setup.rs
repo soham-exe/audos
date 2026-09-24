@@ -2,6 +2,9 @@ use reqwest::Client;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(windows)]
+#[allow(unused_imports)]
+use std::os::windows::process::CommandExt;
 
 const MIN_FILE_SIZE: u64 = 15_000_000; // yt-dlp.exe is typically > 15MB
 const MAX_AGE_DAYS: u64 = 30; // Re-download if older than 30 days
@@ -109,9 +112,17 @@ fn is_valid_yt_dlp(path: &Path) -> Result<bool, String> {
 }
 
 // Helper function to verify yt-dlp works
+// Helper function to verify yt-dlp works
 pub fn verify_yt_dlp(yt_dlp_path: &Path) -> Result<String, String> {
-    let output = std::process::Command::new(yt_dlp_path)
-        .arg("--version")
+    let mut cmd = std::process::Command::new(yt_dlp_path);
+    cmd.arg("--version");
+
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to execute yt-dlp: {}", e))?;
     
@@ -132,8 +143,15 @@ pub fn verify_yt_dlp(yt_dlp_path: &Path) -> Result<String, String> {
 // Optional: Update yt-dlp to latest version
 #[allow(dead_code)]
 pub fn update_yt_dlp(yt_dlp_path: &Path) -> Result<bool, String> {
-    let output = std::process::Command::new(yt_dlp_path)
-        .arg("-U") // Update flag
+    let mut cmd = std::process::Command::new(yt_dlp_path);
+    cmd.arg("-U");
+
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(0x08000000);
+    }
+
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to execute yt-dlp update: {}", e))?;
     
