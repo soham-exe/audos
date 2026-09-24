@@ -224,7 +224,7 @@ async fn fetch_category(query: &str) -> Result<Vec<YtTrack>, String> {
             let duration = json["duration"].as_f64().unwrap_or(0.0);
 
             // Songs only: 60s - 10min
-            if duration > 0.0 && (duration < 60.0 || duration > 600.0) {
+            if duration > 0.0 && (duration < 60.0 || duration > 1200.0) {
                 continue;
             }
 

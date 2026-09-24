@@ -2,6 +2,8 @@ import './styles.css';
 import { createSwapy } from 'swapy';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { open, confirm as tauriConfirm, message as tauriMessage } from '@tauri-apps/plugin-dialog';
+import { check } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
 
 // ==========================================
 // Theme System
@@ -18,6 +20,43 @@ function loadTheme(name: ThemeName) {
 
 const savedTheme = (localStorage.getItem('theme') as ThemeName) || 'paper';
 loadTheme(savedTheme);
+
+// ==========================================
+// Auto-update system
+// ==========================================
+async function checkForUpdates() {
+    try {
+        const update = await check();
+        if (!update) return;   // no update available — silent
+
+        const shouldUpdate = await tauriConfirm(
+            `Version ${update.version} is available.\n\nCurrent version: ${update.currentVersion}\n\nUpdate now?`,
+            { title: 'Update Available', kind: 'info' }
+        );
+        if (!shouldUpdate) return;
+
+        await update.downloadAndInstall((event) => {
+            if (event.event === 'Started') {
+                console.log(`[update] downloading ${event.data.contentLength} bytes`);
+            } else if (event.event === 'Progress') {
+                console.log(`[update] +${event.data.chunkLength} bytes`);
+            } else if (event.event === 'Finished') {
+                console.log('[update] download complete');
+            }
+        });
+
+        await tauriMessage('Update installed. Audos will restart.', {
+            title: 'Update Complete',
+            kind: 'info',
+        });
+        await relaunch();
+    } catch (e) {
+        // Silent fail — don't bug the user about update errors
+        // (offline, network issues, DNS, etc.)
+        console.warn('[update] check failed:', e);
+    }
+}
+
 // ==========================================
 // yt-dlp readiness
 // ==========================================
@@ -2199,6 +2238,10 @@ window.addEventListener('DOMContentLoaded', () => {
     };
     getPort();
 
+    // Silent update check — 5 seconds after launch so it doesn't
+    // compete with yt-dlp setup and the home feed for network
+    setTimeout(checkForUpdates, 5000);
+    
     (async () => {
         // Wait for yt-dlp to be ready before the home feed tries
         // to hit YouTube. On a warm launch this returns in ~1 frame.
