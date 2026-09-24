@@ -29,3 +29,4 @@ src-tauri/gen/schemas/
 *.key
 *.key.pub
 $HOME/RELEASING.md
+RELEASING.md
