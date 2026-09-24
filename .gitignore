@@ -29,5 +29,5 @@ src-tauri/gen/schemas/
 *.key
 *.key.pub
 RELEASING.md
-documentation.txt
 theme.md
+documentation.txt
