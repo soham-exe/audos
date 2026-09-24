@@ -1,0 +1,1313 @@
+# Audos — Theme Authoring Guide
+
+- **Last updated:** 2026-09-24
+- **App version:** 0.1.2
+- **Audience:** anyone writing a new theme, including future-you
+
+## Table of Contents
+
+1. [How theming works (the 30-second version)](#1-how-theming-works-the-30-second-version)
+2. [File layout and registration](#2-file-layout-and-registration)
+3. [The anatomy of a theme file](#3-the-anatomy-of-a-theme-file)
+4. [Token reference](#4-token-reference)
+   - [4.1 Surfaces](#41-surfaces)
+   - [4.2 Text](#42-text)
+   - [4.3 Accent](#43-accent)
+   - [4.4 Lines / borders](#44-lines--borders)
+   - [4.5 Selection (playlist highlight)](#45-selection-playlist-highlight)
+   - [4.6 Icons (filter chains)](#46-icons-filter-chains)
+   - [4.7 Semantic colors](#47-semantic-colors)
+   - [4.8 Typography](#48-typography)
+   - [4.9 Sizing scale](#49-sizing-scale)
+   - [4.10 Spacing scale](#410-spacing-scale)
+   - [4.11 Radius scale](#411-radius-scale)
+   - [4.12 Motion](#412-motion)
+   - [4.13 Shadows](#413-shadows)
+   - [4.14 Player bar (structure)](#414-player-bar-structure)
+   - [4.15 Progress + volume bars](#415-progress--volume-bars)
+   - [4.16 Player card backdrop](#416-player-card-backdrop)
+   - [4.17 Overlays](#417-overlays)
+   - [4.18 Playlist thumbnail gradients](#418-playlist-thumbnail-gradients)
+   - [4.19 Layout dimensions](#419-layout-dimensions)
+   - [4.20 Panel shell](#420-panel-shell)
+   - [4.21 Sidebar list items](#421-sidebar-list-items)
+   - [4.22 Track rows](#422-track-rows)
+   - [4.23 Album cards](#423-album-cards)
+   - [4.24 Quick grid](#424-quick-grid)
+   - [4.25 Queue items](#425-queue-items)
+   - [4.26 Modal](#426-modal)
+   - [4.27 Context menu](#427-context-menu)
+   - [4.28 Refresh / feed](#428-refresh--feed)
+   - [4.29 Theme background image / video](#429-theme-background-image--video)
+5. [What you CANNOT change with tokens alone](#5-what-you-cannot-change-with-tokens-alone)
+6. [What you CAN change with tokens alone (checklist)](#6-what-you-can-change-with-tokens-alone-checklist)
+7. [Writing your first theme — step by step](#7-writing-your-first-theme--step-by-step)
+8. [Structural overrides](#8-structural-overrides--making-a-theme-feel-different-not-just-recolored)
+9. [Icon filter cookbook](#9-icon-filter-cookbook)
+10. [Testing your theme](#10-testing-your-theme)
+11. [Troubleshooting](#11-troubleshooting)
+12. [Appendix A — full example theme files](#12-appendix-a--full-example-theme-files)
+13. [Appendix B — token cross-reference](#13-appendix-b--token-cross-reference)
+
+---
+
+## 1. How theming works (the 30-second version)
+
+The entire application is styled through CSS custom properties (variables) defined in `:root` in `src/styles.css`. Every color, size, spacing, radius, shadow, font, and structural value used by any component comes from a token.
+
+A theme is a single CSS file that overrides those tokens inside a scoped selector:
+
+```css
+body.theme-yourname { --bg: ...; --accent: ...; ... }
+```
+
+When the user picks a theme from the profile menu, `main.ts`:
+
+1. Removes any existing `theme-*` class from `<body>`
+2. Adds the new `theme-*` class
+3. Saves the choice to `localStorage` under key `"theme"`
+4. Calls `applyThemeBackground()` — see [section 4.29](#429-theme-background-image--video)
+
+The next time the app boots, `loadTheme()` reads that key and reapplies the class before the first paint.
+
+That's it. No JS logic beyond the theme switch and background. No DOM changes. No components re-instantiating. Just a class swap and the CSS does the rest.
+
+---
+
+## 2. File layout and registration
+
+Directory structure:
+
+```
+src/
+    styles.css              <-- base stylesheet, defines ALL tokens in :root
+    themes/
+        paper.css           <-- default theme (mirrors :root values)
+        midnight.css        <-- dark theme
+        nord.css            <-- cool blue theme
+        terminal.css        <-- flat mono theme
+        glacier.css         <-- cool teal-slate theme
+        <yourtheme>.css     <-- NEW FILE GOES HERE
+    main.ts
+public/
+    bg/                     <-- theme background images/videos
+```
+
+To register a new theme, make three edits (plus one optional):
+
+### Edit 1 — `src/main.ts`, near the top
+
+```ts
+type ThemeName =
+    'paper' | 'midnight' | 'nord' | 'terminal' | 'glacier' | 'yourname';
+
+function loadTheme(name: ThemeName) {
+    document.body.classList.remove(
+        'theme-paper', 'theme-midnight', 'theme-nord',
+        'theme-terminal', 'theme-glacier', 'theme-yourname'
+    );
+    document.body.classList.add(`theme-${name}`);
+    localStorage.setItem('theme', name);
+    const sel = document.getElementById('theme-select') as HTMLSelectElement | null;
+    if (sel) sel.value = name;
+    applyThemeBackground(name);   // see section 4.29
+}
+```
+
+### Edit 2 — `src/main.ts`, in the profile context menu handler
+
+Inside the `themeSelect.innerHTML` block:
+
+```ts
+themeSelect.innerHTML = `
+    <option value="paper">Paper (default)</option>
+    <option value="midnight">Midnight</option>
+    <option value="nord">Nord</option>
+    <option value="terminal">Terminal</option>
+    <option value="glacier">Glacier</option>
+    <option value="yourname">Your Theme</option>
+`;
+```
+
+### Edit 3 — `index.html`, in `<head>`
+
+```html
+<link rel="stylesheet" href="/src/themes/yourname.css" />
+```
+
+### Optional Edit 4 — `src/main.ts`, if your theme has a bundled background
+
+```ts
+const BUNDLED_THEME_BACKGROUNDS: Partial<Record<ThemeName, string>> = {
+    midnight: '/bg/midnight.jpg',
+    yourname: '/bg/yourname.jpg',   // see section 4.29
+};
+```
+
+That's all four edits. Save. Reload. Your theme appears in the picker.
+
+---
+
+## 3. The anatomy of a theme file
+
+A theme file has exactly one required structure:
+
+```css
+/* Optional: file header comment */
+body.theme-yourname {
+    /* token overrides go here */
+}
+```
+
+Rules:
+
+- The selector **MUST** be `body.theme-yourname` (the class is what `loadTheme` applies to `<body>`).
+- Override only the tokens you want to differ from the `:root` defaults. Everything you don't override inherits from `:root`.
+- You can add theme-specific CSS rules outside the selector block if you need behavior that isn't expressible as a token override. See [section 5](#5-what-you-cannot-change-with-tokens-alone).
+
+**Example — the smallest possible theme** (just recolors the accent):
+
+```css
+body.theme-mono {
+    --accent: #888;
+    --accent-hover: #aaa;
+}
+```
+
+That's a valid theme. It will work. It won't look much different, but it proves the mechanism.
+
+**Example — a full theme:** all five current themes are ~80–120 lines.
+
+---
+
+## 4. Token reference
+
+Every token below is defined in `:root` in `styles.css`. Override any of them in your theme file to change that aspect of the UI.
+
+Token names use kebab-case. Values are any valid CSS value for that property: hex colors, `rgba()`, named colors, `var()` references to other tokens, `calc()`, gradients, fonts, lengths, etc.
+
+### 4.1 Surfaces
+
+| Token | Description | Default |
+|---|---|---|
+| `--bg` | Page background (behind everything, visible in the outer gutter between panels) | `#ece8de` |
+| `--panel` | Main panel background (sidebar, main view, top bar, queue) | `#e6e2d6` |
+| `--panel-strong` | Hover / emphasis background inside panels | `#dcd7c8` |
+| `--paper` | Card surfaces (album cards, quick items, list items, context menus, modals) | `#f2efe6` |
+
+> **TIP:** For a fully flat theme, set `--bg`, `--panel`, `--panel-strong`, and `--paper` to the same value (or very close values). This is what Terminal does.
+
+### 4.2 Text
+
+| Token | Description | Default |
+|---|---|---|
+| `--text` | Primary text | `#17140f` |
+| `--text-dim` | Secondary text | `#6b6255` |
+| `--text-faint` | Tertiary text, metadata | `#9a9184` |
+| `--text-on-media` | Text on top of album art / dark backdrops in the player card | `#ffffff` |
+| `--text-on-media-dim` | Dimmed on-media text (times, artist name) | `rgba(255,255,255,0.65)` |
+| `--text-on-media-mute` | Very faint on-media text | `rgba(255,255,255,0.4)` |
+| `--track-playing-text` | Title and index color of the currently playing track. Falls back to `--text` if unset. Use for accent-tinted playing rows. | *(unset)* |
+
+Example:
+
+```css
+--track-playing-text: var(--accent);
+```
+
+### 4.3 Accent
+
+| Token | Description | Default |
+|---|---|---|
+| `--accent` | Primary accent (playing track, likes, progress on idle, active chips) | `#d8432e` |
+| `--accent-hover` | Hover state of accent | `#bf3824` |
+| `--accent-on-text` | Text color drawn ON an accent-filled surface | `#ffffff` |
+
+### 4.4 Lines / borders
+
+| Token | Description | Default |
+|---|---|---|
+| `--line` | Standard border / divider line | `rgba(23,20,15,0.10)` |
+| `--line-strong` | Emphasis border (hover state, modal border) | `rgba(23,20,15,0.22)` |
+| `--line-ink` | Focus / high-contrast border (search focus) | `rgba(23,20,15,0.55)` |
+| `--line-on-media` | Line drawn on top of album art backdrops | `rgba(255,255,255,0.20)` |
+
+### 4.5 Selection (playlist highlight)
+
+| Token | Description | Default |
+|---|---|---|
+| `--selection-bg` | Background of selected list item | `rgba(159,197,232,0.35)` |
+| `--selection-bg-hover` | Hover on selected item | `rgba(159,197,232,0.5)` |
+| `--selection-bg-collapsed` | Selected when sidebar is collapsed | `rgba(159,197,232,0.25)` |
+| `--selection-border` | Left border accent of selected item | `#9fc5e8` |
+| `--selection-inner` | Inner box-shadow on selected item | `inset 0 1px 0 rgba(255,255,255,0.3)` |
+| `--selection-text` | Text color when selected | `#17140f` |
+| `--selection-text-dim` | Subtitle color when selected | `rgba(23,20,15,0.65)` |
+
+### 4.6 Icons (filter chains)
+
+All icons are monochrome SVGs served as static assets and tinted via CSS filter chains. This is the single most important section for theming — getting these wrong makes icons invisible.
+
+| Token | Description | Default |
+|---|---|---|
+| `--icon-filter` | Default icon tint (all toolbar, nav, list icons) | `brightness(0) saturate(100%) invert(30%) sepia(8%) saturate(500%) hue-rotate(15deg)` |
+| `--icon-filter-accent` | Accent tint (liked heart, active control) | `brightness(0) saturate(100%) invert(35%) sepia(70%) saturate(1800%) hue-rotate(345deg) brightness(95%) contrast(90%)` |
+| `--icon-filter-inverse` | Used for icons on accent / dark surfaces | `invert(1)` (i.e. white) |
+| `--icon-filter-success` | Downloaded indicator green | `invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(118%) contrast(119%)` |
+| `--icon-filter-muted` | Faint placeholder icons | `invert(0.3)` |
+| `--icon-opacity-dim` | Default opacity for secondary icons | `0.75` |
+| `--icon-opacity-full` | Full opacity | `1` |
+
+See [section 9](#9-icon-filter-cookbook) for the filter cookbook. **Do not eyeball these.**
+
+### 4.7 Semantic colors
+
+| Token | Description | Default |
+|---|---|---|
+| `--success` | Success state (rarely used directly, mostly `--icon-filter-success`) | `#1db954` |
+| `--warning` | Warning state | `#e2a000` |
+| `--danger` | Error / destructive (delete button) | `#d8432e` |
+
+### 4.8 Typography
+
+| Token | Description | Default |
+|---|---|---|
+| `--font-display` | Font for large headings (greeting, section titles) | `'Archivo Black', Impact, sans-serif` |
+| `--font-mono` | Monospace (metadata, numbers, times) | `'IBM Plex Mono', ui-monospace, monospace` |
+| `--font-body` | Default body font | `-apple-system, BlinkMacSystemFont, "Segoe UI", ...` |
+
+**Font size scale:**
+
+| Token | Value | Used for |
+|---|---|---|
+| `--fs-xs` | `10.5px` | metadata, subtle labels |
+| `--fs-sm` | `12px` | |
+| `--fs-base` | `14px` | body default |
+| `--fs-md` | `13.5px` | list items |
+| `--fs-lg` | `16px` | |
+| `--fs-xl` | `22px` | empty state heading |
+| `--fs-2xl` | `26px` | section title |
+| `--fs-3xl` | `32px` | greeting |
+
+> **TIP:** A theme that wants the "all mono" terminal feel just sets:
+>
+> ```css
+> --font-display: var(--font-mono);
+> --font-body:    var(--font-mono);
+> ```
+>
+> Terminal does exactly this.
+
+### 4.9 Sizing scale
+
+*Do not use directly; used by spacing tokens.*
+
+Not a public token, but every spacing token below is composed from these.
+
+### 4.10 Spacing scale
+
+| Token | Value | Notes |
+|---|---|---|
+| `--gap` | `8px` | Outer gutter between panels |
+| `--space-xs` | `4px` | |
+| `--space-sm` | `8px` | |
+| `--space-md` | `12px` | |
+| `--space-lg` | `16px` | |
+| `--space-xl` | `24px` | |
+| `--space-2xl` | `32px` | |
+| `--space-3xl` | `40px` | |
+
+You can override any of these to make the entire app feel denser or more spacious without editing a single component rule.
+
+**Example — "cozy" theme:**
+
+```css
+--space-sm: 10px;
+--space-md: 14px;
+--space-lg: 20px;
+--gap:      12px;
+```
+
+### 4.11 Radius scale
+
+| Token | Value | Notes |
+|---|---|---|
+| `--radius` | `2px` | Default radius |
+| `--radius-sm` | `2px` | |
+| `--radius-md` | `6px` | |
+| `--radius-lg` | `12px` | |
+| `--radius-pill` | `999px` | |
+
+Override all of these to a single value to make the whole app square or rounded:
+
+```css
+/* Fully sharp theme (Terminal style) */
+--radius: 0;
+--radius-sm: 0;
+--radius-md: 0;
+--radius-lg: 0;
+
+/* Fully rounded theme */
+--radius: 8px;
+--radius-sm: 4px;
+--radius-md: 12px;
+--radius-lg: 20px;
+```
+
+### 4.12 Motion
+
+| Token | Value | Notes |
+|---|---|---|
+| `--ease` | `cubic-bezier(0.2, 0, 0, 1)` | |
+| `--dur` | `160ms` | Standard duration |
+| `--dur-fast` | `100ms` | Fast (progress fill updates) |
+| `--dur-slow` | `260ms` | Slow (grid transitions) |
+| `--dur-slower` | `400ms` | Slowest (backdrop fades) |
+
+A theme can make the app feel snappier or lazier by overriding these:
+
+```css
+/* Snappy */
+--dur: 80ms;
+--dur-slow: 140ms;
+
+/* Cinematic */
+--dur: 260ms;
+--dur-slow: 400ms;
+```
+
+### 4.13 Shadows
+
+| Token | Description |
+|---|---|
+| `--shadow-sm` | Small card shadow |
+| `--shadow-md` | Medium shadow |
+| `--shadow-lg` | Large shadow |
+| `--shadow-on-media` | Shadow for elements on top of album art |
+| `--modal-shadow` | Modal card shadow |
+| `--menu-shadow` | Context menu shadow |
+| `--menu-shadow-lg` | Profile menu shadow |
+
+For a **flat** theme (no shadows at all), override every shadow to `0 0 0 transparent`. Terminal does this.
+
+### 4.14 Player bar (structure)
+
+| Token | Description |
+|---|---|
+| `--player-bg` | Background fill of the bottom player card |
+| `--player-blur` | Backdrop-filter blur radius (0 = no blur) |
+| `--player-saturate` | Backdrop-filter saturation |
+| `--player-border-width` | Border width (0 = no border) |
+| `--player-border-style` | `solid` \| `dashed` \| `none` |
+| `--player-radius` | Corner radius |
+| `--player-padding` | Horizontal padding inside the card |
+| `--player-content-gap` | Gap between now-playing / controls / extra |
+| `--player-backdrop-inset` | How far the blurred album art extends past the card edges (negative values bleed outward) |
+| `--now-playing-thumb-size` | Mini album art size |
+| `--now-playing-thumb-radius` | Mini album art radius |
+| `--play-btn-size` | Play button diameter |
+| `--play-btn-radius` | Play button radius |
+| `--ctrl-btn-size` | Shuffle / prev / next / repeat button size |
+| `--ctrl-btn-radius` | Button radius (`999px` = circle) |
+| `--extra-btn-size` | Queue / volume button size |
+
+### 4.15 Progress + volume bars
+
+| Token | Description |
+|---|---|
+| `--progress-height` | Bar height at rest (default `4px`) |
+| `--progress-height-hover` | Bar height on hover (default `6px`) |
+| `--progress-radius` | Bar corner radius |
+| `--progress-track-bg` | Unfilled track color (on-media) |
+| `--progress-track-bg-idle` | Unfilled track color (no track loaded) |
+| `--progress-fill-bg` | Filled portion color (on-media) |
+| `--progress-fill-bg-idle` | Filled portion color (no track loaded) |
+| `--progress-handle-size` | Size of the draggable dot on hover |
+| `--volume-track-width` | Width of the volume slider |
+| `--volume-height` | Height of volume track at rest |
+| `--volume-height-hover` | Height on hover |
+
+**Example** — a theme where the progress bar is always the accent color, even during playback:
+
+```css
+--progress-fill-bg:      var(--accent);
+--progress-fill-bg-idle: var(--accent);
+```
+
+### 4.16 Player card backdrop
+
+The player card shows a blurred, darkened copy of the current album art behind its content. These tokens control that effect.
+
+| Token | Description |
+|---|---|
+| `--player-backdrop-blur` | Blur radius (px) |
+| `--player-backdrop-saturate` | Saturation multiplier (1 = unchanged) |
+| `--player-backdrop-brightness` | Brightness multiplier (0.5 = darkened) |
+| `--player-backdrop-scrim` | A CSS gradient layered on top of the blurred image for text legibility |
+
+### 4.17 Overlays
+
+| Token | Description | Default |
+|---|---|---|
+| `--overlay-scrim` | Background of the modal overlay (behind dialogs) | `rgba(0,0,0,0.4)` |
+| `--overlay-blur` | Optional backdrop blur on the modal overlay | `none` |
+
+### 4.18 Playlist thumbnail gradients
+
+Decorative gradients used for the four virtual playlist thumbs.
+
+| Token | Description | Default |
+|---|---|---|
+| `--thumb-gradient-liked` | Liked Songs thumb | `linear-gradient(135deg, #450af5, #8e8ee5)` |
+| `--thumb-gradient-downloads` | Downloads thumb | `linear-gradient(135deg, #0a84ff, #004080)` |
+| `--thumb-gradient-folder` | Regular folder thumb | `linear-gradient(135deg, #1db954, #1a472a)` |
+
+If your theme is monochrome (like Terminal), override these to a flat color or a single-hue gradient so they don't clash with the palette.
+
+### 4.19 Layout dimensions
+
+| Token | Default |
+|---|---|
+| `--sidebar-width` | `320px` |
+| `--sidebar-collapsed` | `72px` |
+| `--queue-width` | `300px` |
+| `--header-height` | `56px` |
+| `--player-height` | `96px` |
+| `--sidebar-padding` | `18px 20px` |
+| `--main-padding` | `18px 20px` |
+| `--topbar-padding` | `0 16px` |
+
+Changing `--player-height` or `--header-height` is a real design decision. A compact theme might set `--player-height: 72px`. A spacious one might set it to `120px`. Both work, no other CSS needs to change.
+
+### 4.20 Panel shell
+
+| Token | Default |
+|---|---|
+| `--panel-border-width` | `1px` |
+| `--panel-border-style` | `solid` |
+| `--panel-radius` | `2px` |
+
+- For a borderless theme: `--panel-border-width: 0px`
+- For a thick-bordered theme: `--panel-border-width: 2px`
+
+### 4.21 Sidebar list items
+
+| Token | Default | Notes |
+|---|---|---|
+| `--list-item-padding` | `9px 6px` | |
+| `--list-item-padding-active` | `10px` | padding-left when `:active` |
+| `--list-item-gap` | `12px` | gap between thumb and text |
+| `--list-item-border-width` | `1px` | |
+| `--list-item-border-style` | `solid` | |
+| `--item-img-size` | `40px` | |
+| `--item-img-radius` | `2px` | |
+| `--selection-border-width` | `2px` | |
+
+### 4.22 Track rows
+
+| Token | Default | Notes |
+|---|---|---|
+| `--track-row-height` | `60px` | virtualization reads this at boot! |
+| `--track-row-gap-y` | `10px` | vertical gap between rows |
+| `--track-row-padding` | `10px` | |
+| `--track-row-thumb-size` | `40px` | |
+| `--track-thumb-radius` | `2px` | |
+| `--track-list-margin-top` | `20px` | |
+| `--track-index-width` | `0px` | 0 = no index column |
+| `--track-index-margin` | `0px` | |
+
+> **IMPORTANT** — `--track-row-height` is read by `main.ts` at module load:
+>
+> ```ts
+> const ROW_HEIGHT = parseInt(
+>     getComputedStyle(document.documentElement)
+>         .getPropertyValue('--track-row-height')
+> ) || 60;
+> ```
+>
+> This means: the token is read **once** at app boot. If your theme changes `--track-row-height` and the user switches themes at runtime, the virtualized list will use the old value until reload. This is a known limitation.
+>
+> To fix this properly, `main.ts` would need to re-read the token inside `renderTracks()`. Not implemented yet.
+
+Related: `--track-playing-text` controls the color of the currently playing track's title and index number. Falls back to `--text` if unset. Midnight uses this to make the playing title orange:
+
+```css
+body.theme-midnight {
+    --track-playing-text: var(--accent);
+}
+```
+
+### 4.23 Album cards
+
+| Token | Default | Notes |
+|---|---|---|
+| `--album-card-padding` | `12px` | |
+| `--album-card-radius` | `2px` | |
+| `--album-card-border-width` | `1px` | |
+| `--album-card-border-style` | `solid` | |
+| `--album-card-gap` | `14px` | |
+| `--album-card-min-width` | `180px` | grid cell minimum |
+| `--album-art-radius` | `2px` | |
+| `--album-art-margin-bottom` | `12px` | |
+
+### 4.24 Quick grid
+
+| Token | Default | Notes |
+|---|---|---|
+| `--quick-item-height` | `52px` | |
+| `--quick-grid-columns` | `4` | number of columns, integer |
+
+### 4.25 Queue items
+
+| Token | Default |
+|---|---|
+| `--q-item-padding` | `6px 8px` |
+| `--q-item-radius` | `2px` |
+| `--q-item-border-left-width` | `3px` |
+| `--q-item-gap` | `8px` |
+| `--q-thumb-size` | `36px` |
+| `--queue-panel-padding` | `16px` |
+
+### 4.26 Modal
+
+| Token | Default |
+|---|---|
+| `--modal-min-width` | `320px` |
+| `--modal-padding` | `20px` |
+| `--modal-radius` | `4px` |
+| `--modal-border-width` | `1px` |
+| `--modal-input-padding` | `8px 12px` |
+
+### 4.27 Context menu
+
+| Token | Default |
+|---|---|
+| `--context-menu-min-width` | `180px` |
+| `--context-menu-profile-min-width` | `200px` |
+| `--context-menu-padding` | `4px 0` |
+| `--context-menu-row-padding` | `8px 16px` |
+
+### 4.28 Refresh / feed
+
+| Token | Default |
+|---|---|
+| `--refresh-btn-top` | `24px` |
+| `--refresh-btn-right` | `24px` |
+| `--refresh-btn-size` | `32px` |
+| `--empty-state-min-height` | `340px` |
+
+### 4.29 Theme background image / video
+
+A theme can declare a background image or video that loads when the theme is active. The background sits behind everything, visible through translucent panels (or behind the outer gutter on opaque themes).
+
+Two ways a background can be set:
+
+1. **Bundled** — declared in `main.ts`, ships with the app
+2. **User override** — the user picks their own file via right-click profile → Change Background
+
+> **User override always wins.** If `localStorage` has a key `app_background_path`, the theme's bundled background is not loaded. This is intentional — a user who picks their own background doesn't want it replaced when they switch themes.
+
+#### How to declare a bundled theme background
+
+In `src/main.ts`, find:
+
+```ts
+const BUNDLED_THEME_BACKGROUNDS: Partial<Record<ThemeName, string>> = {
+    midnight: '/bg/midnight.jpg',
+};
+```
+
+Add your theme:
+
+```ts
+    nord: '/bg/nord.jpg',
+    terminal: '/bg/terminal.mp4',
+```
+
+Rules:
+
+- File goes in `public/bg/`
+- Extension determines how it loads:
+  - `.jpg` `.png` `.webp` `.gif` → `<body>` background-image
+  - `.mp4` `.webm` `.mov` `.m4v` `.ogv` → `<video id="app-bg-video">`
+- Path in the map is the Vite-served path: `/bg/yourfile.ext`
+
+#### Scrim control
+
+When a background is active, a scrim (dimming layer) sits between the background and the panels. Two tokens control this:
+
+| Token | Used for | Default |
+|---|---|---|
+| `--body-scrim-opacity` | Image backgrounds | `0.94` |
+| `--body-scrim-opacity-video` | Video backgrounds | `0.4` |
+
+Both accept `0` (fully visible background, no dimming) to `1` (fully hidden, background invisible).
+
+Set both in your theme so it looks right regardless of which type is used:
+
+```css
+body.theme-yourname {
+    --body-scrim-opacity: 0.15;
+    --body-scrim-opacity-video: 0.2;
+}
+```
+
+- **Higher** = panels more readable, background less visible.
+- **Lower** = background more visible, panels may become hard to read.
+
+The `body.has-bg-video` class is added to `<body>` when a video background is active. You can target it for video-specific overrides:
+
+```css
+body.theme-yourname.has-bg-video::before {
+    /* additional scrim tweaks just for video */
+}
+```
+
+> **NOTE:** If you set both `--body-scrim-opacity` and `--body-scrim-opacity-video` to the same value, the background will look consistent across image and video files. If you want a video to be more visible (video is usually brighter/more dynamic), use a lower value for the video token.
+
+**Example — Midnight** (translucent panels, dark video):
+
+```css
+body.theme-midnight {
+    --body-scrim-opacity:        0.15;
+    --body-scrim-opacity-video:  0.2;
+}
+```
+
+> **Historical note:** before v0.1.2, backgrounds were user-only (chosen through the profile menu). The bundled-background mechanism was added so a theme could ship with a canonical background without requiring the user to configure anything.
+
+---
+
+## 5. What you CANNOT change with tokens alone
+
+Some things a theme might want to change are NOT expressible as token overrides. To change these, add extra CSS rules to your theme file **outside** the `body.theme-yourname { ... }` block.
+
+Examples:
+
+```css
+/* Remove the backdrop blur entirely on mobile-like flat themes */
+body.theme-yourname .player-backdrop {
+    filter: none;
+}
+
+/* Replace the progress bar with a segmented bar */
+body.theme-yourname .progress-fill {
+    background: repeating-linear-gradient(
+        90deg, var(--accent) 0 4px, transparent 4px 6px
+    );
+}
+
+/* Diagonal striped background pattern */
+body.theme-yourname #main-view {
+    background-image: repeating-linear-gradient(
+        45deg,
+        var(--panel) 0 8px,
+        var(--panel-strong) 8px 16px
+    );
+}
+
+/* Custom scrollbar */
+body.theme-yourname ::-webkit-scrollbar-thumb {
+    background: var(--accent);
+}
+
+/* Hide an element entirely */
+body.theme-yourname .album-card .album-artist {
+    display: none;
+}
+```
+
+This is fully supported. The theme file is a normal CSS file; the selector scoping just makes sure your rules only apply when your theme is active.
+
+**Things you still cannot change:**
+
+- DOM structure (`main.ts` owns that)
+- Virtualization logic (row height is read at boot; see [4.22](#422-track-rows))
+- Event handlers
+- The set of available tokens (you can only override existing ones)
+
+If you need a new token to make a specific theme possible, add it to `:root` in `styles.css` with a sane default, then replace the hardcoded value in the component rule with `var(--your-new-token)`.
+
+---
+
+## 6. What you CAN change with tokens alone (checklist)
+
+**Yes** — everything below is fully themeable via token overrides:
+
+- [x] All background colors (page, panels, cards, menus, modals)
+- [x] All text colors (primary, secondary, faint, on-media, playing)
+- [x] All border colors and widths
+- [x] All border radii (independently, per component group)
+- [x] All accent colors
+- [x] Selection state (playlist highlight) — colors and border width
+- [x] All icon tints (via `--icon-filter*` chains)
+- [x] All shadows (or their absence)
+- [x] All fonts and font sizes
+- [x] All spacing (gap, padding — globally or per region)
+- [x] All dimensions (sidebar, header, player, queue widths)
+- [x] Panel borders (width, style, presence)
+- [x] Track row height, padding, thumb size
+- [x] Album card padding, border, radius, min-width
+- [x] Quick grid column count
+- [x] Queue item padding, thumb size, border-left thickness
+- [x] Player bar height, radius, border, padding, backdrop filters
+- [x] Progress bar height, colors, radius, handle size
+- [x] Volume bar dimensions and colors
+- [x] Modal size, padding, border, shadow
+- [x] Context menu min-width, row padding, shadow
+- [x] Playlist thumbnail gradients
+- [x] Transition timing and easing
+- [x] Theme background image or video (bundled per theme)
+- [x] Scrim opacity behind the background (image and video independently)
+- [x] Playing-track text color
+
+**No** — you must add extra CSS rules (see [section 5](#5-what-you-cannot-change-with-tokens-alone)) for:
+
+- [ ] Replacing elements with fundamentally different shapes
+- [ ] Adding background patterns / textures
+- [ ] Conditional styling based on states not exposed as tokens
+- [ ] Anything that changes DOM structure
+
+---
+
+## 7. Writing your first theme — step by step
+
+### Step 1 — Copy the template
+
+Create `src/themes/yourname.css` with:
+
+```css
+/* Your theme name — one-line description */
+body.theme-yourname {
+    /* Override tokens here */
+}
+```
+
+### Step 2 — Pick your palette
+
+Choose at minimum:
+
+- A background color (`--bg`)
+- A panel color (`--panel`), usually 2–4% lighter or darker than `--bg`
+- A card color (`--paper`), usually another step away
+- A text color (`--text`) with good contrast against `--bg`
+- A dimmer text (`--text-dim`) for secondary info
+- A faintest text (`--text-faint`) for metadata
+- An accent color (`--accent`)
+- A border color (`--line`)
+
+If your background is light, text goes dark. If your background is dark, text goes light. Don't overthink it — start with contrast and refine.
+
+### Step 3 — Set the text-on-media tokens
+
+These control text drawn over the blurred album art in the player card. For dark themes, they stay white-ish. For light themes, they stay white-ish too (the backdrop is always darkened). You usually don't need to change them unless you're intentionally making a light-on-dark player card.
+
+### Step 4 — Set the icon filters
+
+This is where most first-time themes go wrong. See [section 9](#9-icon-filter-cookbook) for the cookbook. Copy the closest existing theme's filters and tweak the `hue-rotate` value if you want a tinted icon set.
+
+### Step 5 — Set structural tokens (optional)
+
+If your theme wants a distinct feel (flat, sharp, dense, spacious), override the structural tokens in the appropriate section. Not required for a recolor-only theme.
+
+### Step 6 — Register your theme
+
+Apply the four edits from [section 2](#2-file-layout-and-registration):
+
+- `ThemeName` type
+- `loadTheme` class list
+- `<option>` in `themeSelect`
+- `<link>` in `index.html`
+
+### Step 7 — (optional) Add a bundled background
+
+If your theme ships with a background image or video, add the file to `public/bg/` and register it in `BUNDLED_THEME_BACKGROUNDS`. See [section 4.29](#429-theme-background-image--video).
+
+### Step 8 — Test
+
+Reload the app. Right-click the profile button. Pick your theme. If something looks wrong, see [section 11](#11-troubleshooting).
+
+---
+
+## 8. Structural overrides — making a theme feel different, not just recolored
+
+A recolored theme is easy. A theme that feels fundamentally different needs structural overrides. Here are the common patterns.
+
+### Pattern A — "Flat" theme (no borders, no shadows, no fills)
+
+The trick is making everything look like a continuous surface.
+
+```css
+body.theme-flat {
+    --panel-border-width:     0px;
+    --album-card-border-width:0px;
+    --list-item-border-width: 0px;
+    --player-border-width:    0px;
+    --modal-border-width:     0px;
+
+    --shadow-sm: 0 0 0 transparent;
+    --shadow-md: 0 0 0 transparent;
+    --shadow-lg: 0 0 0 transparent;
+
+    --panel:  var(--bg);
+    --paper:  var(--bg);
+}
+```
+
+### Pattern B — "Sharp" theme (zero radius everywhere)
+
+```css
+body.theme-sharp {
+    --radius:      0px;
+    --radius-sm:   0px;
+    --radius-md:   0px;
+    --radius-lg:   0px;
+    --radius-pill: 2px;   /* keep pills as small rounded rects */
+
+    --panel-radius:            0px;
+    --album-card-radius:       0px;
+    --item-img-radius:         0px;
+    --player-radius:           0px;
+    --play-btn-radius:         2px;
+    --ctrl-btn-radius:         2px;
+    --progress-radius:         0px;
+}
+```
+
+### Pattern C — "Dense" theme (compact rows, tighter spacing)
+
+```css
+body.theme-dense {
+    --track-row-height:       40px;
+    --track-row-gap-y:        6px;
+    --track-row-padding:      6px 8px;
+    --track-row-thumb-size:   32px;
+    --item-img-size:          32px;
+    --list-item-padding:      6px 4px;
+    --space-sm:               6px;
+    --space-md:               8px;
+    --gap:                    6px;
+}
+/* NOTE: --track-row-height requires a reload to take effect (see 4.22) */
+```
+
+### Pattern D — "Spacious" theme (roomy, editorial)
+
+```css
+body.theme-spacious {
+    --track-row-height:       84px;
+    --track-row-gap-y:        14px;
+    --track-row-padding:      14px 12px;
+    --track-row-thumb-size:   56px;
+    --item-img-size:          56px;
+    --list-item-padding:      14px 10px;
+    --space-lg:               20px;
+    --space-xl:               32px;
+}
+```
+
+### Pattern E — "Mono" theme (all one font family)
+
+```css
+body.theme-mono {
+    --font-display: var(--font-mono);
+    --font-body:    var(--font-mono);
+}
+```
+
+### Pattern F — "Themed background"
+
+Give a theme a bundled background image or video.
+
+In `src/main.ts`:
+
+```ts
+const BUNDLED_THEME_BACKGROUNDS = {
+    yourname: '/bg/yourname.jpg',   // or .mp4
+};
+```
+
+In `src/themes/yourname.css`:
+
+```css
+body.theme-yourname {
+    --body-scrim-opacity: 0.2;
+    --body-scrim-opacity-video: 0.3;
+}
+```
+
+File goes in `public/bg/yourname.jpg` (or `.mp4`).
+
+See [section 4.29](#429-theme-background-image--video) for full details, including the user-override precedence rule and how the scrim interacts with translucent panels.
+
+### Pattern G — "Glass" theme (translucent panels, blurred backdrop)
+
+```css
+body.theme-glass {
+    --panel:         rgba(20, 20, 20, 0.55);
+    --panel-strong:  rgba(30, 30, 30, 0.70);
+    --paper:         rgba(25, 25, 25, 0.60);
+
+    --body-scrim-opacity: 0.1;   /* let the background show through */
+}
+
+/* The panels need backdrop-filter to blur what's behind them */
+body.theme-glass .panel,
+body.theme-glass #top-bar,
+body.theme-glass #player-bar,
+body.theme-glass #queue-panel {
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+```
+
+This pattern combines well with a bundled background (Pattern F).
+
+**Combine patterns as needed.** Terminal combines A + B + E + a green accent. Midnight combines translucent panels + F + accent-colored playing text.
+
+---
+
+## 9. Icon filter cookbook
+
+Icons in this app are SVGs with hardcoded black fill/stroke. To colorize them, we use CSS filter chains that:
+
+1. Desaturate (`brightness(0) saturate(100%)`) → makes it pure black
+2. Invert with a specific amount + `hue-rotate` → produces the target color
+
+The most reliable way to get an exact color is to generate the filter with a tool. Recommended: <https://codepen.io/sosuke/pen/Pjoqqp>
+
+Enter your target hex color. Copy the generated filter string. Paste it as the value of `--icon-filter` (or one of the other icon filter tokens).
+
+**Example filters:**
+
+```css
+/* Dark warm gray (Paper default) */
+brightness(0) saturate(100%) invert(30%) sepia(8%) saturate(500%)
+hue-rotate(15deg)
+
+/* Light warm gray (Midnight default) */
+brightness(0) saturate(100%) invert(75%) sepia(4%) saturate(200%)
+hue-rotate(180deg) brightness(95%)
+
+/* Bright red (accent on light bg) */
+brightness(0) saturate(100%) invert(35%) sepia(70%) saturate(1800%)
+hue-rotate(345deg) brightness(95%) contrast(90%)
+
+/* Bright green (success / terminal accent) */
+brightness(0) saturate(100%) invert(75%) sepia(60%) saturate(500%)
+hue-rotate(60deg) brightness(100%)
+
+/* Teal (Glacier accent) */
+brightness(0) saturate(100%) invert(75%) sepia(40%) saturate(700%)
+hue-rotate(155deg) brightness(100%)
+
+/* Pure white (inverse, default) */
+invert(1)
+
+/* Pure black (no filter needed for black icons) */
+brightness(0) saturate(100%)
+```
+
+> **IMPORTANT** — filter chains are cumulative. If you want to override `--icon-filter-accent` (liked heart) but your accent is a completely different hue, you **MUST** regenerate the filter for that exact hex. Do not tweak `hue-rotate()` by hand; use the tool.
+
+---
+
+## 10. Testing your theme
+
+After registering the theme, verify these UI states in order:
+
+- [ ] App boots without a flash of unstyled content
+- [ ] Sidebar renders with correct surfaces and text
+- [ ] Playlist thumbnails (Liked / Downloads / folders) are visible
+- [ ] Selected playlist shows the correct highlight and border
+- [ ] Main view renders the greeting and quick-grid tiles
+- [ ] Album cards in the home feed look correct (art, title, artist)
+- [ ] Track rows show thumbnail, title, subtitle, download icon (if manual)
+- [ ] Hover states work on all rows
+- [ ] Context menu opens and rows are readable
+- [ ] Right-click profile → menu opens; theme dropdown works
+- [ ] Player bar renders correctly with no track loaded
+- [ ] Click a track → player bar switches to `has-track` state
+- [ ] Icons on the player bar are visible (not black-on-black)
+- [ ] Progress bar fills as the track plays
+- [ ] Volume slider is visible and draggable
+- [ ] Queue panel opens and rows are readable
+- [ ] Modal (rename playlist) renders correctly
+- [ ] Drag a track onto a playlist → drop indicator is visible
+- [ ] Collapse sidebar → icons and tooltips look correct
+- [ ] Playing a track shows the correct `--track-playing-text` color
+- [ ] Switch to your theme — if it declares a background, it appears
+- [ ] If a user background is set, it takes priority over the theme's
+- [ ] Switch to a theme with no background — the previous one goes away
+
+---
+
+## 11. Troubleshooting
+
+### Icons are invisible (black-on-black or white-on-white)
+
+- **Cause:** Your `--icon-filter` is producing a color close to the background.
+- **Fix:** Regenerate the filter chain for the exact color you want. See [section 9](#9-icon-filter-cookbook).
+
+### Text is unreadable (dark text on dark bg, or light on light)
+
+- **Cause:** `--text`, `--text-dim`, or `--text-faint` don't have enough contrast with `--bg` or `--panel`.
+- **Fix:** Pick text colors 4–5 steps away from your background in luminance.
+
+### Some parts of the UI still look like the default theme
+
+- **Cause:** The component in question uses a hardcoded value that hasn't been tokenized. Check if there's a token for the region (see [section 4](#4-token-reference)). If not, add one to `:root` in `styles.css` and update the rule.
+- **Fix:** Search `styles.css` for the literal value you're seeing.
+
+### Theme doesn't appear in the picker
+
+- **Cause:** The `<option>` for it wasn't added, or the class list in `loadTheme` doesn't include the new class name.
+- **Fix:** Verify all four registration edits ([section 2](#2-file-layout-and-registration)).
+
+### Theme option is there but selecting it does nothing
+
+- **Cause:** The CSS file isn't loading (404), or the selector inside it is wrong (must be `body.theme-yourname`).
+- **Fix:** Open DevTools → Network, check for the CSS request. Open DevTools → Elements, check `<body>` has the class.
+
+### Row height changes break the virtualized list
+
+- **Cause:** `--track-row-height` is read at boot (see [4.22](#422-track-rows)). Switching themes with a different row height only takes effect after reload.
+- **Fix:** Reload the app after switching to/from a theme with a custom row height.
+
+### Shadows look wrong / too strong / too weak
+
+- **Cause:** Shadow tokens are tuned for the original paper background.
+- **Fix:** On dark themes, darken them (use `rgba(0,0,0, ...)` not `rgba(20,20,20,...)`). On flat themes, zero them out.
+
+### Modals/menus appear with a color that doesn't match your palette
+
+- **Cause:** They use `--paper` for their background. If you haven't overridden `--paper`, they inherit the default (light cream).
+- **Fix:** Ensure `--paper` is set in your theme.
+
+### The player card looks weird when a track is playing
+
+- **Cause:** The backdrop effect is governed by 4 tokens. Verify all four: `--player-backdrop-blur`, `--player-backdrop-saturate`, `--player-backdrop-brightness`, `--player-backdrop-scrim`.
+
+### My theme declares a background but it doesn't show up
+
+- **Cause 1:** The user has set their own background via the profile menu (`localStorage` `app_background_path` is populated). User override wins. Clear it via right-click profile → Reset to Defaults.
+- **Cause 2:** The file isn't in `public/bg/`, or the path in `BUNDLED_THEME_BACKGROUNDS` doesn't match the actual filename. Open DevTools → Network, filter by "bg", look for a 404.
+
+### The background shows but panels are unreadable
+
+- **Cause:** `--body-scrim-opacity` is too low. Raise it until the panels are legible.
+- **Fix:** Start at 0.3, work downward. On Midnight with its translucent panels, 0.15 usually works. On opaque-panel themes, you may need 0.5 or higher.
+
+### Background looks different between image and video files
+
+- **Cause:** You've set `--body-scrim-opacity` and `--body-scrim-opacity-video` to different values, or one is unset and defaults to 0.4.
+- **Fix:** Set both explicitly. If you want them identical, use the same value.
+
+### The playing track's title is the wrong color
+
+- **Cause:** `--track-playing-text` is set to something unexpected, or you're inheriting a value from `:root` that doesn't match your palette.
+- **Fix:** Explicitly set `--track-playing-text: var(--accent);` in your theme if you want the accent color, or to `var(--text)` to disable highlighting.
+
+### Switching themes at runtime doesn't update the background
+
+- **Cause:** This shouldn't happen — `applyThemeBackground()` is called from `loadTheme()`. If it does, check that `loadTheme()` includes the `applyThemeBackground(name)` call ([section 2](#2-file-layout-and-registration), Edit 1).
+- **Fix:** Compare your `loadTheme()` against the version in section 2.
+
+---
+
+## 12. Appendix A — full example theme files
+
+### `src/themes/paper.css` (default, mirrors `:root`)
+
+```css
+body.theme-paper {
+    --bg:            #ece8de;
+    --panel:         #e6e2d6;
+    --panel-strong:  #dcd7c8;
+    --paper:         #f2efe6;
+    --text:          #17140f;
+    --text-dim:      #6b6255;
+    --text-faint:    #9a9184;
+    --accent:        #d8432e;
+    --accent-hover:  #bf3824;
+    --line:          rgba(23, 20, 15, 0.10);
+    --line-strong:   rgba(23, 20, 15, 0.22);
+    --line-ink:      rgba(23, 20, 15, 0.55);
+    /* ... etc. Copy from :root for the full list. */
+}
+```
+
+### `src/themes/terminal.css` (flat, mono, phosphor green)
+
+```css
+body.theme-terminal {
+    --bg:            #0a0a0a;
+    --panel:         #0d0d0d;
+    --panel-strong:  #161616;
+    --paper:         #0d0d0d;
+    --text:          #d4d4d4;
+    --text-dim:      #8a8a8a;
+    --text-faint:    #5a5a5a;
+    --accent:        #7ec96b;
+    --accent-hover:  #93d97f;
+    --line:          rgba(255, 255, 255, 0.06);
+    --line-strong:   rgba(255, 255, 255, 0.14);
+
+    --icon-filter:         brightness(0) saturate(100%) invert(75%) sepia(30%) saturate(500%) hue-rotate(60deg) brightness(95%);
+    --icon-filter-accent:  brightness(0) saturate(100%) invert(75%) sepia(60%) saturate(500%) hue-rotate(60deg) brightness(100%);
+    --icon-filter-inverse: brightness(0) saturate(100%) invert(85%) sepia(20%) saturate(400%) hue-rotate(60deg) brightness(90%);
+    --icon-filter-success: brightness(0) saturate(100%) invert(75%) sepia(60%) saturate(500%) hue-rotate(60deg) brightness(100%);
+
+    --font-display: 'IBM Plex Mono', monospace;
+    --font-mono:    'IBM Plex Mono', monospace;
+    --font-body:    'IBM Plex Mono', monospace;
+
+    --radius:      0px;
+    --radius-sm:   0px;
+    --radius-md:   0px;
+    --radius-lg:   0px;
+
+    --shadow-sm: 0 0 0 transparent;
+    --shadow-md: 0 0 0 transparent;
+    --shadow-lg: 0 0 0 transparent;
+
+    --panel-border-width:      0px;
+    --album-card-border-width: 0px;
+    --list-item-border-width:  0px;
+
+    --track-row-height:  48px;
+    --progress-height:   2px;
+    --progress-fill-bg:  var(--accent);
+}
+```
+
+### `src/themes/glacier.css` (cool teal-slate, semi-translucent)
+
+```css
+body.theme-glacier {
+    --bg:            #1a2a35;
+    --panel:         rgba(31, 49, 61, 0.72);
+    --panel-strong:  rgba(41, 61, 74, 0.82);
+    --paper:         rgba(37, 55, 68, 0.62);
+    --text:          #d6e5ec;
+    --text-dim:      #7f9aa8;
+    --text-faint:    #4a6373;
+    --accent:        #5dc6d2;
+    --accent-hover:  #7ed4de;
+    --line:          rgba(214, 229, 236, 0.08);
+    --line-strong:   rgba(214, 229, 236, 0.18);
+
+    --body-scrim-opacity:        0.35;
+    --body-scrim-opacity-video:  0.0;
+
+    /* ... full token list follows the same pattern as the others */
+}
+```
+
+### `src/themes/ocean.css` (example minimal recolor)
+
+```css
+body.theme-ocean {
+    --bg:            #0b1c2c;
+    --panel:         #102336;
+    --panel-strong:  #173049;
+    --paper:         #102336;
+    --text:          #d8e6f0;
+    --text-dim:      #7f99b0;
+    --text-faint:    #4a637a;
+    --accent:        #4ec9ff;
+    --accent-hover:  #6fd4ff;
+    --line:          rgba(216, 230, 240, 0.08);
+    --line-strong:   rgba(216, 230, 240, 0.16);
+
+    --icon-filter:         brightness(0) saturate(100%) invert(75%) sepia(30%) saturate(800%) hue-rotate(170deg) brightness(100%);
+    --icon-filter-accent:  brightness(0) saturate(100%) invert(75%) sepia(60%) saturate(1500%) hue-rotate(170deg) brightness(100%);
+
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+```
+
+### Example theme with bundled background + glass panels
+
+```css
+body.theme-ambient {
+    --bg:            #0a0a0c;
+    --panel:         rgba(20, 20, 24, 0.5);
+    --panel-strong:  rgba(30, 30, 36, 0.65);
+    --paper:         rgba(25, 25, 30, 0.55);
+    --text:          #ececf0;
+    --text-dim:      #a0a0a8;
+    --text-faint:    #666670;
+    --accent:        #ff5e3a;
+    --accent-hover:  #ff7454;
+    --track-playing-text: var(--accent);
+
+    --body-scrim-opacity:        0.15;
+    --body-scrim-opacity-video:  0.2;
+}
+
+body.theme-ambient .panel,
+body.theme-ambient #top-bar,
+body.theme-ambient #player-bar,
+body.theme-ambient #queue-panel {
+    backdrop-filter: blur(24px) saturate(1.5);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+}
+
+/* main.ts: BUNDLED_THEME_BACKGROUNDS = { ambient: '/bg/ambient.mp4' } */
+```
+
+---
+
+## 13. Appendix B — token cross-reference
+
+If you're about to change a token and want to know what it will affect, look it up here.
+
+| Token | Affects |
+|---|---|
+| `--bg` | Body background, outer gutter |
+| `--panel` | Top bar, sidebar, main view, queue panel |
+| `--panel-strong` | Hover states of list items, buttons |
+| `--paper` | Cards, modals, context menus, list items, quick tiles, album cards, queue items, load-more button |
+| `--text` | All primary text |
+| `--text-dim` | Secondary text (library header, section subtext) |
+| `--text-faint` | Metadata, times, subtitles |
+| `--text-on-media` | Player bar text over album art |
+| `--track-playing-text` | Title + index of the currently playing track |
+| `--accent` | Playing track name, progress bar (idle), chips (active), scrollbar (n/a), like button (liked) |
+| `--line` | Default borders on panels, list items, cards |
+| `--line-strong` | Hover borders, modal border |
+| `--line-ink` | Search focus ring |
+| `--line-on-media` | Borders on dark backdrops (progress track idle) |
+| `--selection-*` | Selected playlist item highlight |
+| `--icon-filter` | All toolbar, nav, list, and menu icons |
+| `--icon-filter-accent` | Liked heart, active shuffle/repeat |
+| `--icon-filter-inverse` | Icons on accent or dark surfaces |
+| `--icon-filter-success` | Downloaded indicator (green check) |
+| `--icon-filter-muted` | Music-note placeholders, cloud prefix icon |
+| `--font-display` | Greeting, section titles |
+| `--font-mono` | Times, metadata, subtext |
+| `--font-body` | Body text default |
+| `--fs-*` | Text sizes throughout |
+| `--space-*` | Padding, gaps throughout |
+| `--radius-*` | Corner rounding |
+| `--dur-*` / `--ease` | All transitions |
+| `--shadow-*` | Cards, modals, context menus |
+| `--player-*` | Player bar structure and backdrop |
+| `--progress-*` | Progress bar |
+| `--volume-*` | Volume slider |
+| `--overlay-scrim` | Modal overlay |
+| `--thumb-gradient-*` | Playlist thumbnails |
+| `--body-scrim-opacity` | Dimming layer over an image background |
+| `--body-scrim-opacity-video` | Dimming layer over a video background |
+| `--sidebar-*` / `--header-*` etc. | Layout dimensions |
+| `--panel-*` | Panel borders and radius |
+| `--list-item-*` / `--item-img-*` | Sidebar list items |
+| `--track-row-*` / `--track-*` | Track list rows |
+| `--album-*` | Album cards |
+| `--quick-*` | Home view quick grid |
+| `--q-item-*` / `--q-thumb-size` | Queue panel items |
+| `--modal-*` | Rename modal |
+| `--context-menu-*` | Context menus |
