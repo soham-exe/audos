@@ -28,5 +28,6 @@ src-tauri/gen/schemas/
 # Updater signing keys
 *.key
 *.key.pub
-$HOME
 RELEASING.md
+documentation.txt
+theme.md
