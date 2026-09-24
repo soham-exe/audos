@@ -1,7 +1,27 @@
-# Tauri + Vanilla TS
+# Audos
 
-This template should help get you started developing with Tauri in vanilla HTML, CSS and Typescript.
+A desktop music player with YouTube streaming, local library support, and multiple themes.
 
-## Recommended IDE Setup
+## Features
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+- Stream music from YouTube (via yt-dlp)
+- Import local audio files (mp3, flac, m4a, wav, ogg, opus, aac, wma)
+- Extract embedded album art
+- Download tracks for offline playback
+- Five themes: Paper, Midnight, Nord, Terminal, Glacier
+- Custom background images and videos
+- Radio mode — auto-extends the queue with related tracks
+- Queue with drag-to-reorder
+- Liked songs, playlists, and play history
+
+## Install
+
+Download the latest installer from the [Releases page](https://github.com/soham-exe/audos/releases).
+
+## Development
+
+Requires [Node.js](https://nodejs.org/) 18+ and [Rust](https://rustup.rs/).
+
+```bash
+npm install
+npm run tauri dev
