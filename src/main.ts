@@ -1509,8 +1509,28 @@ async function playTrack(index: number) {
     const playIcon = document.getElementById('play-icon') as HTMLImageElement;
     if (playIcon) playIcon.src = '/icons/pause.svg';
 
-    titleEl.textContent = track.title || 'Unknown Title';
+        titleEl.textContent = track.title || 'Unknown Title';
     artistEl.textContent = track.artist_name || 'Unknown Artist';
+
+    // Update Windows media controls
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: track.title || 'Unknown Title',
+            artist: track.artist_name || 'Unknown Artist',
+            album: track.album_name || '',
+            artwork: track.thumbnail ? [
+                { src: track.thumbnail, sizes: '480x360', type: 'image/jpeg' }
+            ] : []
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => togglePlay());
+        navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+            const prev = currentIndex - 1;
+            if (prev >= 0) playTrack(prev);
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => goNextTrack(true));
+    }
 
     const playerBackdrop = document.getElementById('player-backdrop') as HTMLElement;
     const playerBar = document.getElementById('player-bar') as HTMLElement;

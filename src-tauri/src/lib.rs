@@ -41,6 +41,16 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            #[cfg(target_os = "windows")]
+            {
+                use windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
+                let app_id = app.config().identifier.clone();
+                let wide: Vec<u16> = app_id.encode_utf16().chain(std::iter::once(0)).collect();
+                unsafe {
+                    SetCurrentProcessExplicitAppUserModelID(wide.as_ptr());
+                }
+            }
+
             let app_dir = app.path().app_data_dir().expect("no app data dir");
             let conn = db::init_db(&app_dir).expect("db init failed");
 
