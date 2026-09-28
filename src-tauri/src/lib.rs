@@ -88,6 +88,7 @@ pub fn run() {
             home_feed::fetch_home_feed,
             home_feed::total_categories,
             radio::fetch_related_tracks,
+            yt_bridge::find_alternative,
             get_proxy_port,
             is_yt_dlp_ready,
         ])

@@ -710,6 +710,12 @@ function renderHomeView() {
 
     feedsContainer.innerHTML = '';
     renderSkeleton(feedsContainer, INITIAL_BATCH_SIZE, 6);
+    // Hide splash once the home view is actually on screen
+    const splash = document.getElementById('splash');
+    if (splash && !splash.classList.contains('hidden')) {
+        splash.classList.add('hidden');
+        setTimeout(() => splash.remove(), 350);
+    }
 
     // ────────────────────────────────────────────────────────
     // renderFeeds: builds the DOM for a set of categories
@@ -1411,11 +1417,9 @@ async function playTrack(index: number) {
 
     addToHistory(track);
 
-    // Reset thumbnail animation state
     albumArtEl.classList.remove('loading', 'ready');
     albumArtEl.classList.add('loading');
 
-    // When audio can play, stop the animation
     const clearThumbLoading = () => {
         albumArtEl.classList.remove('loading');
         albumArtEl.classList.add('ready');
@@ -1424,12 +1428,13 @@ async function playTrack(index: number) {
     if (track.source_type === 'youtube_stream') {
         if (!proxyPort) {
             albumArtEl.classList.remove('loading');
-            await tauriMessage("Proxy server is not ready yet. Please wait a moment and try again.", {
+            await tauriMessage("Proxy server is not ready yet.", {
                 title: 'Player Starting',
                 kind: 'warning',
             });
             return;
         }
+
         audio.src = `http://127.0.0.1:${proxyPort}/stream?yt_id=${track.file_path_or_url}`;
         if (downloadMode === 'auto') triggerDownload(track);
     } else {
@@ -1437,11 +1442,68 @@ async function playTrack(index: number) {
     }
 
     audio.addEventListener('canplay', clearThumbLoading, { once: true });
-    audio.addEventListener('error', () => {
+    audio.addEventListener('error', async () => {
         albumArtEl.classList.remove('loading');
+
+        // Only try the alternative for YouTube streams
+        if (track.source_type !== 'youtube_stream') return;
+
+        console.warn(`[play] stream failed for ${track.file_path_or_url}, searching alternative`);
+
+        try {
+            const alt = await invoke<YtTrack | null>('find_alternative', {
+                title: track.title || '',
+                artist: track.artist_name || '',
+                duration: track.duration || 0,
+            });
+
+            if (!alt) {
+                console.warn('[play] no alternative found, skipping');
+                setTimeout(() => goNextTrack(true), 300);
+                return;
+            }
+
+            console.log(`[play] playing alternative ${alt.id}: ${alt.title}`);
+
+            // Swap the queue entry and retry
+            queue[currentIndex] = {
+                id: alt.id,
+                source_type: 'youtube_stream',
+                file_path_or_url: alt.id,
+                title: alt.title,
+                artist_name: alt.uploader,
+                duration: alt.duration,
+                thumbnail: alt.thumbnail,
+            };
+
+            audio.src = `http://127.0.0.1:${proxyPort}/stream?yt_id=${alt.id}`;
+            audio.play().catch(e => console.error('[play] alt playback failed:', e));
+        } catch (e) {
+            console.error('[play] alternative search failed:', e);
+            setTimeout(() => goNextTrack(true), 300);
+        }
     }, { once: true });
 
     audio.play().catch(e => console.error("Playback error:", e));
+    // ── Prefetch the next track's stream URL in the background ──
+    // Runs ~2 seconds after playback starts so it doesn't compete
+    // with the current track's initial buffering.
+    if (currentIndex + 1 < queue.length && proxyPort) {
+        const next = queue[currentIndex + 1];
+        if (next.source_type === 'youtube_stream') {
+            setTimeout(() => {
+                // Only prefetch if the user hasn't already moved on
+                if (currentIndex + 1 >= queue.length) return;
+                if (queue[currentIndex + 1]?.id !== next.id) return;
+
+                fetch(`http://127.0.0.1:${proxyPort}/stream?yt_id=${next.file_path_or_url}`, {
+                    headers: { 'Range': 'bytes=0-1023' }
+                }).catch(() => {
+                    // Silent — prefetch failure is harmless
+                });
+            }, 2000);
+        }
+    }
     isPlaying = true;
 
     const playIcon = document.getElementById('play-icon') as HTMLImageElement;
@@ -2461,18 +2523,9 @@ window.addEventListener('DOMContentLoaded', () => {
     }, 15000);
 
     (async () => {
-    // Wait for yt-dlp to be ready before the home feed tries
-    // to hit YouTube. On a warm launch this returns in ~1 frame.
+    
+    // Wait for yt-dlp, scan playlists, render home
     await waitForYtDlp();
-
-    // Hide splash NOW — the app is ready to render. Feed fetching
-    // will show skeletons in the main view.
-    const splash = document.getElementById('splash');
-    if (splash) {
-        splash.classList.add('hidden');
-        setTimeout(() => splash.remove(), 350);
-    }
-
     // Now do the background work — splash is already gone
     const physicalPlaylists = playlists.filter(p => p.folderPath && !p.folderPath.startsWith('VIRTUAL_'));
     for (const pl of physicalPlaylists) {

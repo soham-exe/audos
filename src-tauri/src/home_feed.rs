@@ -781,7 +781,7 @@ fn is_bad_uploader(uploader: &str) -> bool {
     REJECT.iter().any(|r| u.contains(r))
 }
 
-fn is_trusted_music_channel(uploader: &str) -> bool {
+pub fn is_trusted_music_channel(uploader: &str) -> bool {
     let u = uploader.to_lowercase();
 
     let trusted = [
@@ -868,7 +868,7 @@ fn is_trusted_music_channel(uploader: &str) -> bool {
 /// Looser fallback for uploaders that don't hit the whitelist.
 /// These substrings strongly suggest the channel posts music,
 /// even if it's not a major label or a known curator.
-fn is_music_adjacent(uploader: &str) -> bool {
+pub fn is_music_adjacent(uploader: &str) -> bool {
     let u = uploader.to_lowercase();
 
     const HINTS: &[&str] = &[

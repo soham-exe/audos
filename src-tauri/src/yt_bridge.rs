@@ -28,6 +28,73 @@ pub struct YtTrack {
 }
 
 #[tauri::command]
+pub async fn find_alternative(
+    title: String,
+    artist: String,
+    duration: i64,
+) -> Result<Option<YtTrack>, String> {
+    let yt_exe = get_yt_dlp_path();
+    // Quoted search forces YouTube to treat the whole phrase as one query
+    let query = format!("ytsearch5:\"{}\" \"{}\"", title, artist);
+
+    let mut cmd = tokio::process::Command::new(&yt_exe);
+    #[cfg(windows)]
+    { cmd.creation_flags(0x08000000); }
+
+    let output = cmd
+        .arg(&query)
+        .arg("--dump-json")
+        .arg("--flat-playlist")
+        .output()
+        .await
+        .map_err(|e| format!("Command failed: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    for line in stdout.lines() {
+        if line.trim().is_empty() { continue; }
+
+        if let Ok(json) = serde_json::from_str::<Value>(line) {
+            let id = json["id"].as_str().unwrap_or("").to_string();
+            if id.len() != 11 { continue; }
+
+            let t = json["title"].as_str().unwrap_or("").to_string();
+            if t.is_empty() { continue; }
+
+            let u = json["uploader"]
+                .as_str()
+                .or_else(|| json["channel"].as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let d = json["duration"].as_f64().unwrap_or(0.0) as i64;
+
+            // Duration must be within 3 seconds of the original
+            let duration_ok = duration == 0 || (d - duration).abs() <= 3;
+            if !duration_ok { continue; }
+
+            // Must be from a channel we trust
+            // (import these from home_feed, or duplicate the check)
+            if !crate::home_feed::is_trusted_music_channel(&u)
+                && !crate::home_feed::is_music_adjacent(&u)
+            {
+                continue;
+            }
+
+            return Ok(Some(YtTrack {
+                id: id.clone(),
+                title: t,
+                uploader: u,
+                duration: d,
+                thumbnail: format!("https://i.ytimg.com/vi/{}/hqdefault.jpg", id),
+            }));
+        }
+    }
+
+    Ok(None)
+}
+
+#[tauri::command]
 pub async fn search_youtube(query: String) -> Result<Vec<YtTrack>, String> {
     let yt_exe = get_yt_dlp_path();
     let search_query = format!("ytsearch10:{}", query);
