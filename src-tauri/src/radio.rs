@@ -68,6 +68,18 @@ pub async fn fetch_related_tracks(yt_id: String) -> Result<Vec<YtTrack>, String>
             if title.is_empty() {
                 continue;
             }
+            // Reject YouTube's placeholder titles for deleted / private / unavailable videos
+            let tl = title.to_lowercase();
+            if tl == "[deleted video]"
+                || tl == "[private video]"
+                || tl == "deleted video"
+                || tl == "private video"
+                || tl.starts_with("[deleted")
+                || tl.starts_with("[private")
+                || tl == "[unavailable video]"
+            {
+                continue;
+            }
 
             // ...rest of parsing
             let uploader = json["uploader"]

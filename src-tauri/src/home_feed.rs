@@ -266,6 +266,18 @@ async fn fetch_from_search(query: &str) -> Result<Vec<YtTrack>, String> {
             if title.is_empty() {
                 continue;
             }
+                        // Reject YouTube's placeholder titles for deleted / private / unavailable videos
+            let tl = title.to_lowercase();
+            if tl == "[deleted video]"
+                || tl == "[private video]"
+                || tl == "deleted video"
+                || tl == "private video"
+                || tl.starts_with("[deleted")
+                || tl.starts_with("[private")
+                || tl == "[unavailable video]"
+            {
+                continue;
+            }
 
             // ...rest of parsing
             let uploader = json["uploader"]
@@ -419,6 +431,19 @@ async fn fetch_playlist_contents(query: &str) -> Result<Vec<YtTrack>, String> {
 
             let title = json["title"].as_str().unwrap_or("").to_string();
             if title.is_empty() { continue; }
+
+            // Reject YouTube's placeholder titles for deleted / private / unavailable videos
+            let tl = title.to_lowercase();
+            if tl == "[deleted video]"
+                || tl == "[private video]"
+                || tl == "deleted video"
+                || tl == "private video"
+                || tl.starts_with("[deleted")
+                || tl.starts_with("[private")
+                || tl == "[unavailable video]"
+            {
+                continue;
+            }
 
             let uploader = json["uploader"]
                 .as_str()
