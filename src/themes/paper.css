@@ -110,6 +110,7 @@ body.theme-paper {
   --player-backdrop-saturate:   1.4;
   --player-backdrop-brightness: 0.4;
   --player-backdrop-scrim:      linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.55) 100%);
+  --player-backdrop-opacity: 0.8;
 
   /* ── Overlays / current-track backgrounds ──────── */
   --accent-bg-faint:  rgba(232, 74, 122, 0.06);

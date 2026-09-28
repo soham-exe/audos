@@ -1,0 +1,235 @@
+/* ==========================================================================
+   NIGHTBLOOM — synthwave/cyberpunk. Magenta + cyan on near-black glass.
+   Pattern mix: Glass (G) + Sharp (B) + neon glow extras (section 5)
+   ========================================================================== */
+
+body.theme-nightbloom {
+    /* --- surfaces --- */
+    --bg:            #0a0612;
+    --panel:         rgba(20, 12, 32, 0.70);
+    --panel-strong:  rgba(32, 18, 48, 0.82);
+    --paper:         rgba(24, 14, 38, 0.65);
+
+    /* --- text --- */
+    --text:              #f0e6ff;
+    --text-dim:          #a68fcf;
+    --text-faint:        #6b5490;
+    --text-on-media:     #ffffff;
+    --text-on-media-dim: rgba(255, 255, 255, 0.65);
+    --text-on-media-mute:rgba(255, 255, 255, 0.4);
+    --track-playing-text: var(--accent);
+
+    /* --- accent (hot magenta, cyan hover) --- */
+    --accent:        #ff2ec4;
+    --accent-hover:  #4deeff;
+    --accent-on-text:#0a0612;
+
+    /* --- lines --- */
+    --line:          rgba(255, 46, 196, 0.14);
+    --line-strong:   rgba(255, 46, 196, 0.32);
+    --line-ink:      rgba(77, 238, 255, 0.65);
+    --line-on-media: rgba(255, 255, 255, 0.2);
+
+    /* --- selection --- */
+    --selection-bg:           rgba(77, 238, 255, 0.18);
+    --selection-bg-hover:     rgba(77, 238, 255, 0.28);
+    --selection-bg-collapsed: rgba(77, 238, 255, 0.14);
+    --selection-border:       #4deeff;
+    --selection-inner:        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    --selection-text:         #f0e6ff;
+    --selection-text-dim:     rgba(240, 230, 255, 0.65);
+
+    /* --- icons ---
+       magenta accent + cyan inverse. Fine-tune exact hues via
+       https://codepen.io/sosuke/pen/Pjoqqp against #ff2ec4 / #4deeff. */
+    --icon-filter:         brightness(0) saturate(100%) invert(75%) sepia(20%) saturate(1200%) hue-rotate(230deg) brightness(105%);
+    --icon-filter-accent:  brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(3000%) hue-rotate(290deg) brightness(105%) contrast(105%);
+    --icon-filter-inverse: brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(1400%) hue-rotate(150deg) brightness(110%);
+    --icon-filter-success: brightness(0) saturate(100%) invert(75%) sepia(60%) saturate(500%) hue-rotate(60deg) brightness(100%);
+    --icon-filter-muted:   invert(0.4);
+
+    /* --- semantic --- */
+    --success: #39ffb0;
+    --warning: #ffcc4d;
+    --danger:  #ff2ec4;
+
+    /* --- typography: mono for that terminal-HUD synthwave feel --- */
+    --font-display: 'Chakra Petch', 'Archivo Black', Impact, sans-serif;
+    --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+    --font-body:    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+    /* --- radius: sharp with pill controls --- */
+    --radius:      2px;
+    --radius-sm:   2px;
+    --radius-md:   4px;
+    --radius-lg:   10px;
+    --panel-radius: 2px;
+    --album-card-radius: 4px;
+    --play-btn-radius: 999px;
+    --ctrl-btn-radius: 999px;
+
+    /* --- motion: snappy --- */
+    --dur: 100ms;
+    --dur-fast: 70ms;
+    --dur-slow: 180ms;
+    --dur-slower: 320ms;
+
+    /* --- shadows: neon glow instead of soft drop shadow --- */
+    --shadow-sm: 0 0 8px rgba(255, 46, 196, 0.25);
+    --shadow-md: 0 0 20px rgba(255, 46, 196, 0.3), 0 0 40px rgba(77, 238, 255, 0.08);
+    --shadow-lg: 0 0 32px rgba(255, 46, 196, 0.35), 0 0 60px rgba(77, 238, 255, 0.12);
+    --shadow-on-media: 0 0 16px rgba(0, 0, 0, 0.6);
+    --modal-shadow: 0 0 40px rgba(255, 46, 196, 0.4);
+    --menu-shadow: 0 0 20px rgba(255, 46, 196, 0.25);
+    --menu-shadow-lg: 0 0 30px rgba(255, 46, 196, 0.3);
+
+    /* --- borders: thin, glowing --- */
+    --panel-border-width: 1px;
+    --album-card-border-width: 1px;
+    --list-item-border-width: 1px;
+    --player-border-width: 1px;
+    --modal-border-width: 1px;
+
+    /* --- player bar --- */
+    --player-bg: rgba(20, 12, 32, 0.75);
+    --player-blur: 24px;
+    --player-saturate: 1.6;
+    --player-radius: 10px;
+    --player-backdrop-brightness: 0.4;
+    --player-backdrop-scrim: linear-gradient(0deg, rgba(10,6,18,0.9), rgba(10,6,18,0.3));
+
+    /* --- progress / volume: always neon regardless of state --- */
+    --progress-fill-bg:      var(--accent);
+    --progress-fill-bg-idle: var(--accent);
+    --progress-track-bg:      rgba(255, 255, 255, 0.15);
+    --progress-track-bg-idle: rgba(255, 46, 196, 0.15);
+
+    /* --- overlays --- */
+    --overlay-scrim: rgba(6, 2, 12, 0.7);
+    --overlay-blur: 6px;
+
+    /* --- thumbnail gradients: neon trio --- */
+    --thumb-gradient-liked:     linear-gradient(135deg, #ff2ec4, #7b2fff);
+    --thumb-gradient-downloads: linear-gradient(135deg, #4deeff, #1c3fae);
+    --thumb-gradient-folder:    linear-gradient(135deg, #39ffb0, #0e7a52);
+
+    /* --- no bundled bg shipped; leave scrim sane if user adds one --- */
+    /* Tuned for a looping synthwave video bg — see registration note below */
+    --body-scrim-opacity: 0.55;
+    --body-scrim-opacity-video: 0.35;
+
+    /* --- layout dimensions: wider, cinematic --- */
+    --sidebar-width:      300px;
+    --sidebar-collapsed:  68px;
+    --queue-width:        340px;
+    --header-height:      60px;
+    --player-height:      104px;
+    --sidebar-padding:    20px 22px;
+    --main-padding:       22px 26px;
+    --topbar-padding:     0 20px;
+
+    /* --- panel shell --- */
+    --panel-border-width: 1px;
+    --panel-border-style: solid;
+
+    /* --- sidebar list items: slightly taller, generous thumb --- */
+    --list-item-padding:        10px 8px;
+    --list-item-gap:            14px;
+    --item-img-size:            44px;
+    --item-img-radius:          4px;
+    --selection-border-width:   2px;
+
+    /* --- track rows: HUD-style index column, wider thumb --- */
+    --track-row-height:       58px;
+    --track-row-gap-y:        8px;
+    --track-row-padding:      10px 12px;
+    --track-row-thumb-size:   44px;
+    --track-thumb-radius:     4px;
+    --track-index-width:      28px;
+    --track-index-margin:     10px;
+
+    /* --- album cards: wide cinematic grid tiles --- */
+    --album-card-padding:      14px;
+    --album-card-gap:          18px;
+    --album-card-min-width:    210px;
+    --album-art-radius:        4px;
+    --album-art-margin-bottom: 12px;
+
+    /* --- quick grid: 5 tight tiles for a dashboard feel --- */
+    --quick-item-height:  56px;
+    --quick-grid-columns: 5;
+
+    /* --- queue items --- */
+    --q-item-padding:           7px 10px;
+    --q-item-border-left-width: 4px;
+    --q-thumb-size:             40px;
+    --queue-panel-padding:      18px;
+
+    /* --- modal: wider, sharp-cornered --- */
+    --modal-min-width:     380px;
+    --modal-padding:       24px;
+    --modal-radius:        10px;
+    --modal-border-width:  1px;
+    --modal-input-padding: 9px 14px;
+
+    /* --- context menu: roomier rows --- */
+    --context-menu-min-width:         200px;
+    --context-menu-profile-min-width: 220px;
+    --context-menu-row-padding:       9px 18px;
+
+    /* --- refresh button --- */
+    --refresh-btn-size: 36px;
+    --refresh-btn-top:  28px;
+    --refresh-btn-right:28px;
+}
+
+/* ==========================================================================
+   BUNDLED VIDEO BACKGROUND
+   Ships without an asset by default. To give Nightbloom a looping video:
+
+     1. Drop a clip at public/bg/nightbloom.mp4 (a slow synthwave grid /
+        neon skyline / rain-on-glass loop all read well at low brightness).
+     2. In src/main.ts:
+
+          const BUNDLED_THEME_BACKGROUNDS: Partial<Record<ThemeName, string>> = {
+              midnight:   '/bg/midnight.jpg',
+              nightbloom: '/bg/nightbloom.mp4',
+          };
+
+     The scrim tokens above (--body-scrim-opacity-video: 0.35) are already
+     tuned so panel text stays readable over a bright, high-motion clip.
+     If you use an image instead (.jpg/.png), swap the extension and rely
+     on --body-scrim-opacity: 0.55 instead — it's set higher because a
+     still frame doesn't have motion to draw the eye away from busy detail.
+   ========================================================================== */
+
+/* Glass blur on core panels (Pattern G) */
+body.theme-nightbloom .panel,
+body.theme-nightbloom #top-bar,
+body.theme-nightbloom #player-bar,
+body.theme-nightbloom #queue-panel {
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+}
+
+/* Glow ring on the currently selected playlist item */
+body.theme-nightbloom .list-item.selected {
+    box-shadow: inset 0 0 0 1px rgba(77, 238, 255, 0.4), 0 0 12px rgba(77, 238, 255, 0.15);
+}
+
+/* Segmented "scanline" progress fill for extra HUD texture */
+body.theme-nightbloom .progress-fill {
+    background: linear-gradient(90deg, #ff2ec4, #4deeff);
+    box-shadow: 0 0 8px rgba(255, 46, 196, 0.6);
+}
+
+/* Thin scanline overlay across the main view for atmosphere */
+body.theme-nightbloom #main-view {
+    background-image: repeating-linear-gradient(
+        0deg,
+        rgba(255, 255, 255, 0.012) 0px,
+        rgba(255, 255, 255, 0.012) 1px,
+        transparent 1px,
+        transparent 3px
+    );
+}

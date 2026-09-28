@@ -1,0 +1,222 @@
+/* ==========================================================================
+   DEEP FOREST — moody evergreen dark theme, brass/gold accent, glass panels.
+   Pattern mix: Glass (G) + Bundled background hook (F, optional) + dense-ish
+   ========================================================================== */
+
+body.theme-deep-forest {
+    /* --- surfaces --- */
+    --bg:            #0e1712;
+    --panel:         rgba(20, 30, 24, 0.72);
+    --panel-strong:  rgba(29, 42, 34, 0.85);
+    --paper:         rgba(23, 34, 27, 0.68);
+
+    /* --- text --- */
+    --text:              #e7ecdf;
+    --text-dim:          #9db29a;
+    --text-faint:        #5f7861;
+    --text-on-media:     #ffffff;
+    --text-on-media-dim: rgba(255, 255, 255, 0.65);
+    --text-on-media-mute:rgba(255, 255, 255, 0.4);
+    --track-playing-text: var(--accent);
+
+    /* --- accent: warm brass/gold against deep green --- */
+    --accent:        #d9a441;
+    --accent-hover:  #eeb95a;
+    --accent-on-text:#14201a;
+
+    /* --- lines --- */
+    --line:          rgba(231, 236, 223, 0.08);
+    --line-strong:   rgba(231, 236, 223, 0.18);
+    --line-ink:      rgba(217, 164, 65, 0.6);
+    --line-on-media: rgba(255, 255, 255, 0.2);
+
+    /* --- selection --- */
+    --selection-bg:           rgba(217, 164, 65, 0.16);
+    --selection-bg-hover:     rgba(217, 164, 65, 0.24);
+    --selection-bg-collapsed: rgba(217, 164, 65, 0.12);
+    --selection-border:       #d9a441;
+    --selection-inner:        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --selection-text:         #f2f5ec;
+    --selection-text-dim:     rgba(231, 236, 223, 0.65);
+
+    /* --- icons: pale sage default, gold accent ---
+       tuned for #e7ecdf neutral and #d9a441 accent; refine exact hues via
+       https://codepen.io/sosuke/pen/Pjoqqp for pixel-perfect match */
+    --icon-filter:         brightness(0) saturate(100%) invert(85%) sepia(8%) saturate(400%) hue-rotate(60deg) brightness(95%);
+    --icon-filter-accent:  brightness(0) saturate(100%) invert(70%) sepia(55%) saturate(700%) hue-rotate(0deg) brightness(100%);
+    --icon-filter-inverse: invert(1);
+    --icon-filter-success: brightness(0) saturate(100%) invert(65%) sepia(55%) saturate(600%) hue-rotate(70deg) brightness(100%);
+    --icon-filter-muted:   invert(0.5) sepia(10%) hue-rotate(60deg);
+
+    /* --- semantic --- */
+    --success: #6fbf6f;
+    --warning: #d9a441;
+    --danger:  #c25b4a;
+
+    /* --- typography: quiet, editorial --- */
+    --font-display: 'Fraunces', 'Archivo Black', Georgia, serif;
+    --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+    --font-body:    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+    /* --- radius: organic, mid-rounded --- */
+    --radius:      6px;
+    --radius-sm:   4px;
+    --radius-md:   10px;
+    --radius-lg:   16px;
+    --panel-radius: 12px;
+    --album-card-radius: 10px;
+    --play-btn-radius: 999px;
+    --ctrl-btn-radius: 999px;
+
+    /* --- motion: slow, cinematic --- */
+    --dur: 220ms;
+    --dur-slow: 360ms;
+    --dur-slower: 480ms;
+
+    /* --- shadows: deep and soft --- */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+    --modal-shadow: 0 20px 48px rgba(0, 0, 0, 0.6);
+    --menu-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+    --menu-shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.45);
+
+    /* --- borders: thin, mossy --- */
+    --panel-border-width: 1px;
+    --album-card-border-width: 1px;
+    --list-item-border-width: 0px;
+
+    /* --- player bar --- */
+    --player-bg: rgba(20, 30, 24, 0.78);
+    --player-blur: 22px;
+    --player-saturate: 1.3;
+    --player-radius: 14px;
+    --player-backdrop-brightness: 0.45;
+    --player-backdrop-scrim: linear-gradient(0deg, rgba(14,23,18,0.92), rgba(14,23,18,0.25));
+
+    /* --- progress / volume --- */
+    --progress-fill-bg:      var(--accent);
+    --progress-fill-bg-idle: var(--accent);
+    --progress-track-bg-idle: rgba(217, 164, 65, 0.14);
+
+    /* --- overlays --- */
+    --overlay-scrim: rgba(6, 10, 8, 0.6);
+    --overlay-blur: 4px;
+
+    /* --- thumbnail gradients: forest trio --- */
+    --thumb-gradient-liked:     linear-gradient(135deg, #d9a441, #7a5a1e);
+    --thumb-gradient-downloads: linear-gradient(135deg, #4d7a63, #12241c);
+    --thumb-gradient-folder:    linear-gradient(135deg, #6f8f4f, #24361c);
+
+    --body-scrim-opacity: 0.2;
+    --body-scrim-opacity-video: 0.28;
+
+    /* --- layout dimensions: slightly narrower, closer-in, moody --- */
+    --sidebar-width:      280px;
+    --sidebar-collapsed:  66px;
+    --queue-width:        280px;
+    --header-height:      56px;
+    --player-height:      100px;
+    --sidebar-padding:    18px 20px;
+    --main-padding:       20px 22px;
+    --topbar-padding:     0 18px;
+
+    /* --- panel shell --- */
+    --panel-border-width: 1px;
+    --panel-border-style: solid;
+
+    /* --- sidebar list items --- */
+    --list-item-padding:        9px 8px;
+    --list-item-gap:            12px;
+    --item-img-size:            40px;
+    --item-img-radius:          8px;
+    --selection-border-width:   2px;
+
+    /* --- track rows: organic, mid-density --- */
+    --track-row-height:       68px;
+    --track-row-gap-y:        8px;
+    --track-row-padding:      10px 10px;
+    --track-row-thumb-size:   48px;
+    --track-thumb-radius:     6px;
+    --track-index-width:      22px;   /* faint index column, low-key */
+    --track-index-margin:     8px;
+
+    /* --- album cards --- */
+    --album-card-padding:      12px;
+    --album-card-gap:          16px;
+    --album-card-min-width:    190px;
+    --album-art-radius:        8px;
+    --album-art-margin-bottom: 12px;
+
+    /* --- quick grid --- */
+    --quick-item-height:  60px;
+    --quick-grid-columns: 4;
+
+    /* --- queue items --- */
+    --q-item-padding:           7px 9px;
+    --q-item-radius:            8px;
+    --q-item-border-left-width: 3px;
+    --q-thumb-size:              38px;
+    --queue-panel-padding:       16px;
+
+    /* --- modal: organic large radius --- */
+    --modal-min-width:     340px;
+    --modal-padding:       22px;
+    --modal-radius:        18px;
+    --modal-border-width:  1px;
+    --modal-input-padding: 9px 12px;
+
+    /* --- context menu --- */
+    --context-menu-min-width:         190px;
+    --context-menu-profile-min-width: 210px;
+    --context-menu-row-padding:       8px 16px;
+
+    /* --- refresh / empty state --- */
+    --refresh-btn-size:       32px;
+    --refresh-btn-top:        22px;
+    --refresh-btn-right:      22px;
+    --empty-state-min-height: 340px;
+}
+
+/* ==========================================================================
+   BUNDLED VIDEO BACKGROUND
+   Deep Forest is built for a slow ambient loop — misty canopy, falling
+   leaves, or firelight through trees:
+
+     1. Drop a clip at public/bg/deep-forest.mp4 (or a still at .jpg)
+     2. In src/main.ts:
+
+          const BUNDLED_THEME_BACKGROUNDS: Partial<Record<ThemeName, string>> = {
+              midnight:    '/bg/midnight.jpg',
+              'deep-forest': '/bg/deep-forest.mp4',
+          };
+
+        Note: ThemeName is a hyphenated string here, so keep it quoted as a
+        key exactly like above, and use the same string for the theme-*
+        class and <option value="deep-forest">.
+
+     --body-scrim-opacity-video: 0.28 keeps the clip visible but subdued
+     behind the glass panels; raise toward 0.4–0.5 if your footage is
+     brighter or busier than a slow ambient loop.
+   ========================================================================== */
+
+/* Glass blur on core panels (Pattern G) */
+body.theme-deep-forest .panel,
+body.theme-deep-forest #top-bar,
+body.theme-deep-forest #player-bar,
+body.theme-deep-forest #queue-panel {
+    backdrop-filter: blur(18px) saturate(1.3);
+    -webkit-backdrop-filter: blur(18px) saturate(1.3);
+}
+
+/* Gold-tinted scrollbar */
+body.theme-deep-forest ::-webkit-scrollbar-thumb {
+    background: var(--accent);
+}
+
+/* Subtle vignette across the main view for depth */
+body.theme-deep-forest #main-view {
+    background-image: radial-gradient(
+        ellipse at 50% -10%, rgba(217, 164, 65, 0.06) 0, transparent 55%
+    );
+}

@@ -18,7 +18,7 @@ pub fn get_yt_dlp_path() -> String {
         .unwrap_or_else(|| "yt-dlp".to_string())
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone)]
 pub struct YtTrack {
     pub id: String,
     pub title: String,
@@ -78,26 +78,34 @@ pub async fn search_youtube(query: String) -> Result<Vec<YtTrack>, String> {
 
 pub async fn get_stream_url(yt_id: &str) -> Result<String, String> {
     let yt_exe = get_yt_dlp_path();
-    // Create the command
-    let mut cmd = tokio::process::Command::new(&yt_exe);
 
-    // APPLY THE HIDE FLAG HERE
-    #[cfg(windows)]
-    {
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
-    let output = cmd
-        .arg("-g")
-        .arg("-f")
-        .arg("bestaudio[protocol^=http][protocol!=m3u8]/bestaudio[ext=m4a]/bestaudio")
-        .arg(format!("https://www.youtube.com/watch?v={}", yt_id))
-        .output()
-        .await
-        .map_err(|e| format!("Command failed: {}", e))?;
+    for attempt in 1..=3 {
+        let mut cmd = tokio::process::Command::new(&yt_exe);
+        #[cfg(windows)]
+        { cmd.creation_flags(0x08000000); }
 
-    let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if url.is_empty() || !url.starts_with("http") {
-        return Err("Failed to extract stream URL".into());
+        let output = cmd
+            .arg("-g")
+            .arg("-f")
+            .arg("bestaudio[protocol^=http][protocol!=m3u8]/bestaudio[ext=m4a]/bestaudio")
+            .arg(format!("https://www.youtube.com/watch?v={}", yt_id))
+            .output()
+            .await
+            .map_err(|e| format!("Command failed: {}", e))?;
+
+        let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if url.starts_with("http") {
+            return Ok(url);
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("page needs to be reloaded") && attempt < 3 {
+            tokio::time::sleep(tokio::time::Duration::from_secs(2 * attempt as u64)).await;
+            continue;
+        }
+
+        return Err(format!("Failed to extract stream URL: {}", stderr.trim()));
     }
-    Ok(url)
+
+    Err("Failed after 3 attempts".to_string())
 }

@@ -65,9 +65,9 @@ body.theme-glacier {
 
   /* ── Player card — soft luminous backdrop ────────── */
   --player-bg:                    rgba(31, 49, 61, 0.78);
-  --player-blur:                  24px;
+  --player-blur:                  15px;
   --player-saturate:              1.5;
-  --player-backdrop-blur:         64px;
+  --player-backdrop-blur:         20px;
   --player-backdrop-saturate:     1.6;
   --player-backdrop-brightness:   0.42;
   --player-backdrop-scrim:        linear-gradient(
@@ -75,6 +75,7 @@ body.theme-glacier {
                                     rgba(15, 28, 38, 0.35) 0%,
                                     rgba(15, 28, 38, 0.65) 100%
                                   );
+  --player-backdrop-opacity: 0.3;
 
   /* ── Component-specific ──────────────────────────── */
   --accent-bg-faint:  rgba(126, 204, 184, 0.08);
@@ -101,7 +102,9 @@ body.theme-glacier {
   --panel-radius:            10px;
   --album-card-radius:       12px;
   --album-art-radius:        10px;
-  --player-radius:           14px;
+  --player-radius:           30px;
+  --player-inset:            50px;
+  --player-bottom-offset:    20px;
   --play-btn-radius:         999px;
   --ctrl-btn-radius:         999px;
   --modal-radius:            12px;

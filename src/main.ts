@@ -5,16 +5,24 @@ import { open, confirm as tauriConfirm, message as tauriMessage } from '@tauri-a
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 
+
+import { getCurrentWindow } from '@tauri-apps/api/window';
+
+// Show the window once the splash is in the DOM
+requestAnimationFrame(() => {
+    getCurrentWindow().show().catch(e => console.warn('[window] show failed:', e));
+});
 // ==========================================
 // Theme System
 // ==========================================
-type ThemeName = 'paper' | 'midnight' | 'nord' | 'terminal' | 'glacier';
+type ThemeName = 'paper' | 'midnight' | 'nord' | 'terminal' | 'glacier'| 'nightbloom'|'deep-forest'|'sakura';
 
 // ── Bundled theme backgrounds ─────────────────
 // Value can be an image (.jpg/.png/.webp) or a video (.mp4/.webm).
 const BUNDLED_THEME_BACKGROUNDS: Partial<Record<ThemeName, string>> = {
     midnight: '/bg/midnight.mp4',
     glacier: '/bg/midnight.mp4',
+    nightbloom: '/bg/midnight.mp4',
 };
 
 function isVideoPath(path: string): boolean {
@@ -48,9 +56,60 @@ function applyThemeBackground(theme: ThemeName) {
     }
 }
 
+function renderTrackSkeleton(container: HTMLElement, count = 8) {
+    container.innerHTML = '';
+
+    const list = document.createElement('div');
+    list.className = 'track-list-skeleton';
+
+    for (let i = 0; i < count; i++) {
+        const row = document.createElement('div');
+        row.className = 'skeleton-track-row';
+        row.innerHTML = `
+            <div class="skeleton-thumb"></div>
+            <div class="skeleton-track-info">
+                <div class="skeleton-line" style="width: 55%;"></div>
+                <div class="skeleton-line skeleton-line--short" style="width: 30%;"></div>
+            </div>
+        `;
+        list.appendChild(row);
+    }
+
+    container.appendChild(list);
+}
+
+// ── Skeleton loader ──────────────────────────────
+function renderSkeleton(container: HTMLElement, categoryCount = 4, cardsPerRow = 6) {
+    for (let i = 0; i < categoryCount; i++) {
+        const section = document.createElement('div');
+        section.className = 'home-feed-section';
+
+        const title = document.createElement('div');
+        title.className = 'skeleton-title';
+        section.appendChild(title);
+
+        const grid = document.createElement('div');
+        grid.className = 'album-carousel';
+
+        for (let j = 0; j < cardsPerRow; j++) {
+            const card = document.createElement('div');
+            card.className = 'album-card skeleton-card';
+            card.innerHTML = `
+                <div class="skeleton-art"></div>
+                <div class="skeleton-line"></div>
+                <div class="skeleton-line skeleton-line--short"></div>
+            `;
+            grid.appendChild(card);
+        }
+
+        section.appendChild(grid);
+        container.appendChild(section);
+    }
+}
+
 // ── Theme loader ──────────────────────────────
 function loadTheme(name: ThemeName) {
-    document.body.classList.remove('theme-paper', 'theme-midnight', 'theme-nord','theme-terminal','theme-glacier');
+    document.body.classList.remove('theme-paper', 'theme-midnight', 'theme-nord','theme-terminal','theme-glacier','theme-nightbloom','theme-sakura','theme-deep-forest');
     document.body.classList.add(`theme-${name}`);
     localStorage.setItem('theme', name);
     const sel = document.getElementById('theme-select') as HTMLSelectElement | null;
@@ -59,7 +118,7 @@ function loadTheme(name: ThemeName) {
 }
 
 // ── Boot ──────────────────────────────────────
-const savedTheme = (localStorage.getItem('theme') as ThemeName) || 'paper';
+const savedTheme = (localStorage.getItem('theme') as ThemeName) || 'glacier';
 loadTheme(savedTheme);
 
 
@@ -544,7 +603,13 @@ let homeRenderToken = 0;
 let loadedCategoryCount = 0;
 let totalCategoryCount = 0;
 let loadingMore = false;
-const BATCH_SIZE = 8;
+
+const INITIAL_BATCH_SIZE = 1;
+const LOAD_MORE_BATCH_SIZE = 3;
+const BACKGROUND_BATCH_SIZE = 5;
+
+// Highest category index that's been prefetched (or is being prefetched)
+let prefetchingUpTo = 0;
 
 function isHomeCacheValid(): boolean {
     return homeFeedCache.length > 0
@@ -641,8 +706,10 @@ function renderHomeView() {
     // Reset per-render state (but NOT the cache)
     loadedCategoryCount = 0;
     loadingMore = false;
+    prefetchingUpTo = 0;
 
-    feedsContainer.innerHTML = '<p class="feed-loading">Loading your feed...</p>';
+    feedsContainer.innerHTML = '';
+    renderSkeleton(feedsContainer, INITIAL_BATCH_SIZE, 6);
 
     // ────────────────────────────────────────────────────────
     // renderFeeds: builds the DOM for a set of categories
@@ -722,9 +789,13 @@ function renderHomeView() {
             btn.disabled = true;
             await loadBatch(
                 loadedCategoryCount,
-                loadedCategoryCount + BATCH_SIZE,
+                loadedCategoryCount + LOAD_MORE_BATCH_SIZE,
                 true
             );
+            // Prefetch the next background batch after the visible one renders
+            setTimeout(() => {
+                prefetchBatch(loadedCategoryCount, loadedCategoryCount + BACKGROUND_BATCH_SIZE);
+            }, 1500);
         };
         container.appendChild(btn);
     };
@@ -819,9 +890,43 @@ function renderHomeView() {
     };
 
     // ────────────────────────────────────────────────────────
+    // prefetchBatch: fetches and caches categories silently
+    // without rendering them. Runs in the background after the
+    // visible batch finishes.
+    // ────────────────────────────────────────────────────────
+    const prefetchBatch = async (start: number, end: number) => {
+        if (myToken !== homeRenderToken) return;
+        if (start >= end) return;
+        if (start < prefetchingUpTo) return; // already prefetched or in flight
+
+        prefetchingUpTo = end;
+        console.log(`[home] prefetching categories ${start}..${end}`);
+
+        try {
+            const feeds = await invoke<CategoryFeed[]>('fetch_home_feed', { start, end });
+            if (myToken !== homeRenderToken) return;
+
+            // Merge into cache — replace existing entries by category name
+            for (const feed of feeds) {
+                const existing = homeFeedCache.findIndex(f => f.category === feed.category);
+                if (existing === -1) {
+                    homeFeedCache.push(feed);
+                } else {
+                    homeFeedCache[existing] = feed;
+                }
+            }
+            homeFeedTimestamp = Date.now();
+
+            console.log(`[home] prefetched categories ${start}..${end}`);
+        } catch (e) {
+            console.warn(`[home] prefetch ${start}..${end} failed:`, e);
+        }
+    };
+    
+    // ────────────────────────────────────────────────────────
     // Initial render
     // ────────────────────────────────────────────────────────
-    if (isHomeCacheValid()) {
+        if (isHomeCacheValid()) {
         // Instant render from cache
         console.log(`[home] Rendering from cache (${homeFeedCache.length} categories)`);
         totalCategoryCount = homeFeedTotalCount;
@@ -831,10 +936,20 @@ function renderHomeView() {
         renderFeeds(homeFeedCache, feedsContainer);
         loadedCategoryCount = homeFeedCache.length;
         updateLoadMoreButton(feedsContainer);
+
+        // Kick off a background prefetch for whatever comes next
+        setTimeout(() => {
+            prefetchBatch(loadedCategoryCount, loadedCategoryCount + BACKGROUND_BATCH_SIZE);
+        }, 1500);
     } else {
-        // No valid cache — fetch the first batch
-        console.log('[home] Cache miss — fetching fresh');
-        loadBatch(0, BATCH_SIZE);
+        // No valid cache — fetch a small initial batch for a fast first paint
+        console.log('[home] Cache miss — fetching initial batch');
+        loadBatch(0, INITIAL_BATCH_SIZE).then(() => {
+            // Once the initial 3 render, quietly fetch the next 8
+            setTimeout(() => {
+                prefetchBatch(INITIAL_BATCH_SIZE, INITIAL_BATCH_SIZE + BACKGROUND_BATCH_SIZE);
+            }, 1500);
+        });
     }
 }
 
@@ -1243,30 +1358,45 @@ searchInput.addEventListener('input', (e) => {
 
         displayedTracks = [...localMatches];
         isShowingPlaylist = false;
-        renderTracks(displayedTracks, localMatches.length > 0 ? 'Search Results' : 'Searching YouTube...');
+        renderTracks(displayedTracks, localMatches.length > 0 ? 'Local Search Results' : 'Searching Online...');
 
         if (localMatches.length === 0) {
-            try {
-                const ytResults: YtTrack[] = await invoke('search_youtube', { query });
+        const mainContentArea = document.getElementById('main-content-area');
+        if (mainContentArea) {
+            // Keep the "Searching YouTube..." header visible
+            mainContentArea.innerHTML = '';
 
-                // Cap at 10 and map to Track
-                const ytTracks: Track[] = ytResults.slice(0, 10).map(yt => ({
-                    id: yt.id,
-                    source_type: 'youtube_stream',
-                    file_path_or_url: yt.id,
-                    title: yt.title,
-                    artist_name: yt.uploader,
-                    duration: yt.duration,
-                    thumbnail: yt.thumbnail
-                }));
+            const header = document.createElement('h2');
+            header.className = 'section-title';
+            header.textContent = 'Searching Online...';
+            mainContentArea.appendChild(header);
 
-                displayedTracks = [...ytTracks];
-                renderTracks(displayedTracks, 'YouTube Results');
-            } catch (err) {
-                console.error('YouTube search failed:', err);
-                renderTracks([], 'No results found (YouTube Error)');
-            }
+            // Skeleton list goes below the header
+            const skeletonWrapper = document.createElement('div');
+            mainContentArea.appendChild(skeletonWrapper);
+            renderTrackSkeleton(skeletonWrapper, 8);
         }
+
+        try {
+            const ytResults: YtTrack[] = await invoke('search_youtube', { query });
+
+            const ytTracks: Track[] = ytResults.slice(0, 10).map(yt => ({
+                id: yt.id,
+                source_type: 'youtube_stream',
+                file_path_or_url: yt.id,
+                title: yt.title,
+                artist_name: yt.uploader,
+                duration: yt.duration,
+                thumbnail: yt.thumbnail
+            }));
+
+            displayedTracks = [...ytTracks];
+            renderTracks(displayedTracks, 'Online Results');
+        } catch (err) {
+            console.error('Online search failed:', err);
+            renderTracks([], 'No results found (Online Error)');
+        }
+    }
     }, 500);
 });
 
@@ -1281,8 +1411,19 @@ async function playTrack(index: number) {
 
     addToHistory(track);
 
+    // Reset thumbnail animation state
+    albumArtEl.classList.remove('loading', 'ready');
+    albumArtEl.classList.add('loading');
+
+    // When audio can play, stop the animation
+    const clearThumbLoading = () => {
+        albumArtEl.classList.remove('loading');
+        albumArtEl.classList.add('ready');
+    };
+
     if (track.source_type === 'youtube_stream') {
         if (!proxyPort) {
+            albumArtEl.classList.remove('loading');
             await tauriMessage("Proxy server is not ready yet. Please wait a moment and try again.", {
                 title: 'Player Starting',
                 kind: 'warning',
@@ -1294,6 +1435,11 @@ async function playTrack(index: number) {
     } else {
         audio.src = convertFileSrc(track.file_path_or_url);
     }
+
+    audio.addEventListener('canplay', clearThumbLoading, { once: true });
+    audio.addEventListener('error', () => {
+        albumArtEl.classList.remove('loading');
+    }, { once: true });
 
     audio.play().catch(e => console.error("Playback error:", e));
     isPlaying = true;
@@ -2097,9 +2243,9 @@ function loadAppBackground() {
     document.body.classList.remove('has-bg-video');
     document.body.style.backgroundImage = 'none';
 
-    if (!savedPath) {
-        // No user override — let the theme decide
-        applyThemeBackground(savedTheme);
+        if (!savedPath) {
+        const currentTheme = (localStorage.getItem('theme') as ThemeName) || 'glacier';
+        applyThemeBackground(currentTheme);
         return;
     }
 
@@ -2134,8 +2280,24 @@ profileBtn?.addEventListener('contextmenu', (e) => {
     const menu = document.createElement('div');
     menu.id = 'track-context-menu';
     menu.className = 'context-menu context-menu--profile';
-    menu.style.left = `${e.clientX - 150}px`;
-    menu.style.top = `${e.clientY}px`;
+    const MENU_WIDTH = 220;
+    const MARGIN = 8;
+
+    let left = e.clientX - 150;
+    let top = e.clientY;
+
+    const maxLeft = window.innerWidth - MENU_WIDTH - MARGIN;
+    if (left > maxLeft) left = maxLeft;
+    if (left < MARGIN) left = MARGIN;
+
+    // Estimate height — adjust if you add more items to the menu
+    const estimatedHeight = 380;
+    const maxTop = window.innerHeight - estimatedHeight - MARGIN;
+    if (top > maxTop) top = maxTop;
+    if (top < MARGIN) top = MARGIN;
+
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
 
     const makeRow = (label: string, onClick: () => void) => {
         const row = document.createElement('div');
@@ -2221,13 +2383,16 @@ profileBtn?.addEventListener('contextmenu', (e) => {
     themeSelect.className = 'theme-select';
     themeSelect.id = 'theme-select';
     themeSelect.innerHTML = `
-        <option value="paper">Paper (default)</option>
+        <option value="paper">Paper</option>
         <option value="midnight">Midnight</option>
         <option value="nord">Nord</option>
         <option value="terminal">Terminal</option>
         <option value="glacier">Glacier</option>
+        <option value="nightbloom">NightBloom</option>
+        <option value="sakura">Sakura</option>
+        <option value="deep-forest">Deep-Forest</option>
     `;
-    themeSelect.value = savedTheme;
+    themeSelect.value = (localStorage.getItem('theme') as ThemeName) || 'glacier';
     themeSelect.onchange = (ev) => loadTheme((ev.target as HTMLSelectElement).value as ThemeName);
     themeRow.appendChild(themeSelect);
     menu.appendChild(themeRow);
@@ -2284,25 +2449,41 @@ window.addEventListener('DOMContentLoaded', () => {
     };
     getPort();
 
-    // Silent update check — 5 seconds after launch so it doesn't
-    // compete with yt-dlp setup and the home feed for network
     setTimeout(checkForUpdates, 5000);
-    
-    (async () => {
-        // Wait for yt-dlp to be ready before the home feed tries
-        // to hit YouTube. On a warm launch this returns in ~1 frame.
-        await waitForYtDlp();
-
-        const physicalPlaylists = playlists.filter(p => p.folderPath && !p.folderPath.startsWith('VIRTUAL_'));
-        for (const pl of physicalPlaylists) {
-            try {
-                await invoke('scan_directory', { path: pl.folderPath });
-            } catch (e) {
-                console.error("Startup scan failed:", pl.folderPath);
-            }
+    // Safety net — hide splash after 15s no matter what
+    setTimeout(() => {
+        const splash = document.getElementById('splash');
+        if (splash && !splash.classList.contains('hidden')) {
+            console.warn('[setup] splash timeout — hiding anyway');
+            splash.classList.add('hidden');
+            setTimeout(() => splash.remove(), 350);
         }
-        await fetchAndRenderTracks();
-    })();
+    }, 15000);
 
+    (async () => {
+    // Wait for yt-dlp to be ready before the home feed tries
+    // to hit YouTube. On a warm launch this returns in ~1 frame.
+    await waitForYtDlp();
+
+    // Hide splash NOW — the app is ready to render. Feed fetching
+    // will show skeletons in the main view.
+    const splash = document.getElementById('splash');
+    if (splash) {
+        splash.classList.add('hidden');
+        setTimeout(() => splash.remove(), 350);
+    }
+
+    // Now do the background work — splash is already gone
+    const physicalPlaylists = playlists.filter(p => p.folderPath && !p.folderPath.startsWith('VIRTUAL_'));
+    for (const pl of physicalPlaylists) {
+        try {
+            await invoke('scan_directory', { path: pl.folderPath });
+        } catch (e) {
+            console.error("Startup scan failed:", pl.folderPath);
+        }
+    }
+
+    await fetchAndRenderTracks();
+})();
     setupKeybindings();
 });

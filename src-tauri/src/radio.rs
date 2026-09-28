@@ -53,12 +53,23 @@ pub async fn fetch_related_tracks(yt_id: String) -> Result<Vec<YtTrack>, String>
         if line.trim().is_empty() { continue; }
 
         if let Ok(json) = serde_json::from_str::<Value>(line) {
-            let id = json["id"].as_str().unwrap_or("").to_string();
+            // Skip dead entries — yt-dlp emits these for deleted/private videos
+            // with `"title": null`. They have a valid id but won't play.
+            if json["title"].is_null() {
+                continue;
+            }
 
-            // Skip the seed video itself (it's the first entry in the mix)
-            if id.is_empty() || id == yt_id { continue; }
+            let id = json["id"].as_str().unwrap_or("").to_string();
+            if id.is_empty() || id.len() != 11 {
+                continue;
+            }
 
             let title = json["title"].as_str().unwrap_or("").to_string();
+            if title.is_empty() {
+                continue;
+            }
+
+            // ...rest of parsing
             let uploader = json["uploader"]
                 .as_str()
                 .or_else(|| json["channel"].as_str())

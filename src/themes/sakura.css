@@ -1,0 +1,228 @@
+/* ==========================================================================
+   SAKURA — soft cherry-blossom light theme. Airy, rounded, editorial.
+   Pattern mix: Spacious (D) + rounded radius + warm serif display type
+   ========================================================================== */
+
+body.theme-sakura {
+    /* --- surfaces --- */
+    --bg:            #fdf3f2;
+    --panel:         #fbe9e7;
+    --panel-strong:  #f6dbd8;
+    --paper:         #fffaf9;
+
+    /* --- text --- */
+    --text:              #402224;
+    --text-dim:          #8a5f61;
+    --text-faint:        #c39a9b;
+    --text-on-media:     #ffffff;
+    --text-on-media-dim: rgba(255, 255, 255, 0.7);
+    --text-on-media-mute:rgba(255, 255, 255, 0.45);
+    --track-playing-text: var(--accent);
+
+    /* --- accent: blossom pink, deeper on hover --- */
+    --accent:        #e8628a;
+    --accent-hover:  #d1436f;
+    --accent-on-text:#ffffff;
+
+    /* --- lines --- */
+    --line:          rgba(64, 34, 36, 0.08);
+    --line-strong:   rgba(64, 34, 36, 0.18);
+    --line-ink:      rgba(232, 98, 138, 0.55);
+    --line-on-media: rgba(255, 255, 255, 0.25);
+
+    /* --- selection --- */
+    --selection-bg:           rgba(232, 98, 138, 0.16);
+    --selection-bg-hover:     rgba(232, 98, 138, 0.24);
+    --selection-bg-collapsed: rgba(232, 98, 138, 0.12);
+    --selection-border:       #e8628a;
+    --selection-inner:        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    --selection-text:         #402224;
+    --selection-text-dim:     rgba(64, 34, 36, 0.65);
+
+    /* --- icons: warm mauve default, pink accent ---
+       tuned for #402224-ish neutral and #e8628a accent; refine exact hues
+       via https://codepen.io/sosuke/pen/Pjoqqp if needed */
+    --icon-filter:         brightness(0) saturate(100%) invert(28%) sepia(15%) saturate(700%) hue-rotate(320deg) brightness(92%);
+    --icon-filter-accent:  brightness(0) saturate(100%) invert(45%) sepia(60%) saturate(1200%) hue-rotate(300deg) brightness(100%);
+    --icon-filter-inverse: invert(1);
+    --icon-filter-success: brightness(0) saturate(100%) invert(58%) sepia(45%) saturate(900%) hue-rotate(90deg) brightness(105%);
+    --icon-filter-muted:   invert(0.35) sepia(20%) hue-rotate(300deg);
+
+    /* --- semantic --- */
+    --success: #6fbf7a;
+    --warning: #e2a000;
+    --danger:  #d1436f;
+
+    /* --- typography: soft serif display, clean body --- */
+    --font-display: 'Fraunces', Georgia, serif;
+    --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+    --font-body:    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+    /* --- spacious layout (Pattern D) --- */
+    --track-row-height:     80px;
+    --track-row-gap-y:      12px;
+    --track-row-padding:    14px 12px;
+    --track-row-thumb-size: 54px;
+    --item-img-size:        52px;
+    --list-item-padding:    14px 10px;
+    --space-lg:  20px;
+    --space-xl:  32px;
+    --gap:       12px;
+
+    /* --- radius: fully rounded --- */
+    --radius:       10px;
+    --radius-sm:    6px;
+    --radius-md:    14px;
+    --radius-lg:    22px;
+    --panel-radius: 16px;
+    --album-card-radius: 16px;
+    --album-art-radius:  12px;
+    --item-img-radius:   10px;
+    --play-btn-radius:   999px;
+    --ctrl-btn-radius:   999px;
+
+    /* --- motion: gentle --- */
+    --dur: 180ms;
+    --dur-slow: 300ms;
+    --dur-slower: 420ms;
+
+    /* --- shadows: soft, warm-tinted --- */
+    --shadow-sm: 0 2px 6px rgba(232, 98, 138, 0.10);
+    --shadow-md: 0 6px 16px rgba(232, 98, 138, 0.14);
+    --shadow-lg: 0 12px 32px rgba(232, 98, 138, 0.18);
+    --modal-shadow: 0 16px 40px rgba(232, 98, 138, 0.22);
+    --menu-shadow: 0 6px 16px rgba(232, 98, 138, 0.14);
+    --menu-shadow-lg: 0 10px 24px rgba(232, 98, 138, 0.16);
+
+    /* --- borders: light, mostly invisible --- */
+    --panel-border-width: 0px;
+    --album-card-border-width: 0px;
+    --list-item-border-width: 0px;
+
+    /* --- player bar --- */
+    --player-bg: rgba(255, 183, 204, 0.796);
+    --player-blur:                  15px;
+    --player-backdrop-opacity: 0.5;
+    --player-backdrop-blur:         20px;
+    --player-backdrop-saturate:     1.2;
+    --player-backdrop-brightness:   1;
+    --player-backdrop-scrim:        linear-gradient(
+                                        180deg,
+                                        rgb(78, 65, 78) 0%,
+                                        rgba(249, 185, 238, 0.422) 100%
+                                    ); 
+    --player-radius: 22px;
+    --player-border-width: 0px;
+    --now-playing-thumb-radius: 12px;
+
+    /* --- progress / volume --- */
+    --progress-fill-bg:      var(--accent);
+    --progress-fill-bg-idle: var(--accent);
+    --progress-height: 5px;
+    --progress-radius: 999px;
+
+    /* --- overlays --- */
+    --overlay-scrim: rgba(64, 34, 36, 0.35);
+
+    /* --- thumbnail gradients: blossom trio --- */
+    --thumb-gradient-liked:     linear-gradient(135deg, #e8628a, #f7b6c6);
+    --thumb-gradient-downloads: linear-gradient(135deg, #e6a34f, #f3d29a);
+    --thumb-gradient-folder:    linear-gradient(135deg, #7fb9a8, #cfe8dd);
+
+    --body-scrim-opacity: 0.9;
+    --body-scrim-opacity-video: 0.4;
+
+    /* --- layout dimensions: roomier, relaxed --- */
+    --sidebar-width:      340px;
+    --sidebar-collapsed:  76px;
+    --queue-width:        320px;
+    --header-height:      64px;
+    --player-height:      112px;
+    --player-bottom-offset:8px;
+    --sidebar-padding:    22px 24px;
+    --main-padding:       24px 28px;
+    --topbar-padding:     0 20px;
+
+    /* --- panel shell: borderless, big soft radius --- */
+    --panel-border-width: 0px;
+
+    /* --- sidebar list items --- */
+    --list-item-padding:        16px 12px;
+    --list-item-gap:            14px;
+    --item-img-size:            54px;
+    --item-img-radius:          14px;
+    --selection-border-width:   3px;
+
+    /* (track row sizing already set in Pattern D block above) */
+    --track-index-width:  0px;   /* no index column, keep it airy */
+
+    /* --- album cards: fewer, bigger, generously rounded --- */
+    --album-card-padding:      16px;
+    --album-card-gap:          20px;
+    --album-card-min-width:    220px;
+    --album-art-margin-bottom: 14px;
+
+    /* --- quick grid: 3 wide tiles instead of 4 cramped ones --- */
+    --quick-item-height:  60px;
+    --quick-grid-columns: 3;
+
+    /* --- queue items --- */
+    --q-item-padding:           10px 12px;
+    --q-item-radius:            12px;
+    --q-item-border-left-width: 0px;   /* selection shown via bg, not a hard line */
+    --q-item-gap:                10px;
+    --q-thumb-size:              44px;
+    --queue-panel-padding:       20px;
+
+    /* --- modal: generous, softly rounded --- */
+    --modal-min-width:     360px;
+    --modal-padding:       28px;
+    --modal-radius:        24px;
+    --modal-border-width:  0px;
+    --modal-input-padding: 10px 14px;
+
+    /* --- context menu --- */
+    --context-menu-min-width:         190px;
+    --context-menu-profile-min-width: 220px;
+    --context-menu-padding:           8px 0;
+    --context-menu-row-padding:       10px 18px;
+
+    /* --- refresh button + empty state --- */
+    --refresh-btn-size:       34px;
+    --refresh-btn-top:        26px;
+    --refresh-btn-right:      26px;
+    --empty-state-min-height: 380px;
+}
+
+/* ==========================================================================
+   OPTIONAL BUNDLED IMAGE BACKGROUND
+   Sakura reads well as a still image rather than video — a soft pastel
+   bokeh or a single blossom branch against cream at low opacity:
+
+     1. Drop a file at public/bg/sakura.jpg
+     2. In src/main.ts:
+
+          const BUNDLED_THEME_BACKGROUNDS: Partial<Record<ThemeName, string>> = {
+              midnight: '/bg/midnight.jpg',
+              sakura:   '/bg/sakura.jpg',
+          };
+
+     --body-scrim-opacity: 0.9 above keeps panels almost fully opaque so
+     the background only peeks through the outer gutter — drop it toward
+     0.5–0.6 if you want the image to show through the panels themselves.
+   ========================================================================== */
+
+/* Soft petal-pink scrollbar to match the palette */
+body.theme-sakura ::-webkit-scrollbar-thumb {
+    background: var(--accent);
+    border-radius: 999px;
+}
+
+/* Faint diagonal petal-drift texture behind the main view */
+body.theme-sakura #main-view {
+    background-image: radial-gradient(
+        circle at 20% 15%, rgba(232, 98, 138, 0.05) 0, transparent 35%
+    ), radial-gradient(
+        circle at 80% 70%, rgba(232, 98, 138, 0.04) 0, transparent 40%
+    );
+}

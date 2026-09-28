@@ -17,7 +17,8 @@
         "width": 800,
         "height": 600,
         "dragDropEnabled": false,
-        "visible": true,
+        "backgroundColor": "#ece8de",
+        "visible": false,
         "decorations": true
       }
     ],
