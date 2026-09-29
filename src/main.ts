@@ -15,14 +15,13 @@ requestAnimationFrame(() => {
 // ==========================================
 // Theme System
 // ==========================================
-type ThemeName = 'paper' | 'midnight' | 'nord' | 'terminal' | 'glacier'| 'nightbloom'|'deep-forest'|'sakura';
+type ThemeName = 'paper' | 'midnight' | 'terminal' | 'glacier'| 'nightbloom'|'deep-forest'|'sakura';
 
 // ── Bundled theme backgrounds ─────────────────
 // Value can be an image (.jpg/.png/.webp) or a video (.mp4/.webm).
 const BUNDLED_THEME_BACKGROUNDS: Partial<Record<ThemeName, string>> = {
     midnight: '/bg/midnight.mp4',
     glacier: '/bg/midnight.mp4',
-    nightbloom: '/bg/midnight.mp4',
 };
 
 function isVideoPath(path: string): boolean {
@@ -109,7 +108,7 @@ function renderSkeleton(container: HTMLElement, categoryCount = 4, cardsPerRow =
 
 // ── Theme loader ──────────────────────────────
 function loadTheme(name: ThemeName) {
-    document.body.classList.remove('theme-paper', 'theme-midnight', 'theme-nord','theme-terminal','theme-glacier','theme-nightbloom','theme-sakura','theme-deep-forest');
+    document.body.classList.remove('theme-paper', 'theme-midnight','theme-terminal','theme-glacier','theme-nightbloom','theme-sakura','theme-deep-forest');
     document.body.classList.add(`theme-${name}`);
     localStorage.setItem('theme', name);
     const sel = document.getElementById('theme-select') as HTMLSelectElement | null;
@@ -2467,7 +2466,6 @@ profileBtn?.addEventListener('contextmenu', (e) => {
     themeSelect.innerHTML = `
         <option value="paper">Paper</option>
         <option value="midnight">Midnight</option>
-        <option value="nord">Nord</option>
         <option value="terminal">Terminal</option>
         <option value="glacier">Glacier</option>
         <option value="nightbloom">NightBloom</option>

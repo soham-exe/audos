@@ -4,13 +4,14 @@
    Translucent white panels, soft rose accent, hairline rows.
    ============================================================ */
 body.theme-paper {
-  /* ── Surfaces — warm white, translucent ─────────── */
+
+  /* ── Surfaces ─────────────────────────────────── */
   --bg:            #f7f6f4;
   --panel:         rgba(255, 255, 255, 0.72);
   --panel-strong:  rgba(255, 255, 255, 0.88);
   --paper:         rgba(255, 255, 255, 0.72);
 
-  /* ── Text — near-black, mid gray ───────────────── */
+  /* ── Text ─────────────────────────────────────── */
   --text:              #141414;
   --text-dim:          #5a5a5a;
   --text-faint:        #8a8a8a;
@@ -18,18 +19,18 @@ body.theme-paper {
   --text-on-media-dim: rgba(255, 255, 255, 0.72);
   --text-on-media-mute:rgba(255, 255, 255, 0.42);
 
-  /* ── Accent — rose, like the reference ─────────── */
+  /* ── Accent ───────────────────────────────────── */
   --accent:        #e84a7a;
   --accent-hover:  #d63c6a;
   --accent-on-text:#ffffff;
 
-  /* ── Lines — hairlines only ────────────────────── */
+  /* ── Lines ────────────────────────────────────── */
   --line:          rgba(20, 20, 20, 0.08);
   --line-strong:   rgba(20, 20, 20, 0.14);
   --line-ink:      rgba(20, 20, 20, 0.4);
   --line-on-media: rgba(255, 255, 255, 0.2);
 
-  /* ── Selection — soft rose tint ────────────────── */
+  /* ── Selection ────────────────────────────────── */
   --selection-bg:           rgba(232, 74, 122, 0.08);
   --selection-bg-hover:     rgba(232, 74, 122, 0.14);
   --selection-bg-collapsed: rgba(232, 74, 122, 0.06);
@@ -38,7 +39,7 @@ body.theme-paper {
   --selection-text:         #141414;
   --selection-text-dim:     rgba(20, 20, 20, 0.65);
 
-  /* ── Icons — mid gray ink ──────────────────────── */
+  /* ── Icons ────────────────────────────────────── */
   --icon-filter:         brightness(0) saturate(100%) invert(35%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(95%);
   --icon-filter-accent:  brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(1800%) hue-rotate(320deg) brightness(95%) contrast(90%);
   --icon-filter-inverse: invert(1);
@@ -47,12 +48,12 @@ body.theme-paper {
   --icon-opacity-dim:    0.7;
   --icon-opacity-full:   1;
 
-  /* ── Semantic ──────────────────────────────────── */
+  /* ── Semantic ─────────────────────────────────── */
   --success: #1db954;
   --warning: #e2a000;
   --danger:  #e84a7a;
 
-  /* ── Typography — Inter throughout ─────────────── */
+  /* ── Typography ───────────────────────────────── */
   --font-display: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
   --font-body:    'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -66,8 +67,8 @@ body.theme-paper {
   --fs-2xl:  30px;
   --fs-3xl:  40px;
 
-  /* ── Spacing ───────────────────────────────────── */
-  --gap:       0px;             /* panels flush, like the reference */
+  /* ── Spacing ──────────────────────────────────── */
+  --gap:       0px;
   --space-xs:  4px;
   --space-sm:  8px;
   --space-md:  12px;
@@ -76,21 +77,21 @@ body.theme-paper {
   --space-2xl: 32px;
   --space-3xl: 40px;
 
-  /* ── Radius — soft, small ──────────────────────── */
+  /* ── Radius ───────────────────────────────────── */
   --radius:      6px;
   --radius-sm:   4px;
   --radius-md:   8px;
   --radius-lg:   12px;
   --radius-pill: 999px;
 
-  /* ── Motion ────────────────────────────────────── */
+  /* ── Motion ───────────────────────────────────── */
   --ease:       cubic-bezier(0.2, 0, 0, 1);
   --dur:        160ms;
   --dur-fast:   100ms;
   --dur-slow:   260ms;
   --dur-slower: 400ms;
 
-  /* ── Shadows — soft, minimal ───────────────────── */
+  /* ── Shadows ──────────────────────────────────── */
   --shadow-sm:      0 1px 3px rgba(20, 20, 20, 0.04);
   --shadow-md:      0 4px 14px rgba(20, 20, 20, 0.06);
   --shadow-lg:      0 12px 40px rgba(20, 20, 20, 0.08);
@@ -99,10 +100,7 @@ body.theme-paper {
   --menu-shadow:    0 8px 28px rgba(20, 20, 20, 0.1);
   --menu-shadow-lg: 0 12px 40px rgba(20, 20, 20, 0.12);
 
-  /* ── Body scrim — off, panel translucency does the work ── */
-  --body-scrim-opacity: 0.0;
-
-  /* ── Player card — soft translucent white ──────── */
+  /* ── Player card ──────────────────────────────── */
   --player-bg:                  rgba(255, 255, 255, 0.82);
   --player-blur:                24px;
   --player-saturate:            1.6;
@@ -112,17 +110,17 @@ body.theme-paper {
   --player-backdrop-scrim:      linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.55) 100%);
   --player-backdrop-opacity: 0.8;
 
-  /* ── Overlays / current-track backgrounds ──────── */
+  /* ── Overlays / backgrounds ───────────────────── */
   --accent-bg-faint:  rgba(232, 74, 122, 0.06);
   --overlay-scrim:    rgba(20, 20, 20, 0.4);
   --queue-current-bg: rgba(232, 74, 122, 0.08);
 
-  /* ── Playlist thumbnail gradients ──────────────── */
+  /* ── Playlist thumbnail gradients ─────────────── */
   --thumb-gradient-liked:     linear-gradient(135deg, #e84a7a, #f07a9e);
   --thumb-gradient-downloads: linear-gradient(135deg, #5a78e8, #8aa0f0);
   --thumb-gradient-folder:    linear-gradient(135deg, #4aa87a, #78c8a0);
 
-  /* ── Layout dimensions ─────────────────────────── */
+  /* ── Layout constants ─────────────────────────── */
   --sidebar-width:     300px;
   --sidebar-collapsed: 64px;
   --queue-width:       320px;
@@ -132,12 +130,12 @@ body.theme-paper {
   --main-padding:      32px 36px;
   --topbar-padding:    0 24px;
 
-  /* ── Panel shell — subtle border, translucent ──── */
+  /* ── Panel shell ──────────────────────────────── */
   --panel-border-width: 1px;
   --panel-border-style: solid;
   --panel-radius:       0px;
 
-  /* ── Sidebar list items ────────────────────────── */
+  /* ── Sidebar list items ───────────────────────── */
   --list-item-padding:        8px 6px;
   --list-item-padding-active: 8px;
   --list-item-gap:            12px;
@@ -147,9 +145,9 @@ body.theme-paper {
   --item-img-radius:          6px;
   --selection-border-width:   0px;
 
-  /* ── Track rows — compact, table-like ──────────── */
+  /* ── Track rows ───────────────────────────────── */
   --track-row-height:      52px;
-  --track-row-gap-y:       0px;      /* hairline separators, no gaps */
+  --track-row-gap-y:       0px;
   --track-row-padding:      10px 14px;
   --track-row-thumb-size:  36px;
   --track-thumb-radius:    4px;
@@ -157,7 +155,7 @@ body.theme-paper {
   --track-index-width:     28px;
   --track-index-margin:    16px;
 
-  /* ── Album cards — soft, framed ────────────────── */
+  /* ── Album cards ──────────────────────────────── */
   --album-card-padding:      12px;
   --album-card-radius:       10px;
   --album-card-border-width: 0px;
@@ -167,11 +165,11 @@ body.theme-paper {
   --album-art-radius:        6px;
   --album-art-margin-bottom: 12px;
 
-  /* ── Quick grid ────────────────────────────────── */
+  /* ── Quick grid ───────────────────────────────── */
   --quick-item-height:  56px;
   --quick-grid-columns: 4;
 
-  /* ── Queue items ───────────────────────────────── */
+  /* ── Queue items ──────────────────────────────── */
   --q-item-padding:            8px 10px;
   --q-item-radius:             6px;
   --q-item-border-left-width:  3px;
@@ -179,7 +177,7 @@ body.theme-paper {
   --q-thumb-size:              36px;
   --queue-panel-padding:       16px;
 
-  /* ── Player bar ────────────────────────────────── */
+  /* ── Player bar ───────────────────────────────── */
   --player-border-width:       1px;
   --player-border-style:       solid;
   --player-radius:             0px;
@@ -194,7 +192,7 @@ body.theme-paper {
   --ctrl-btn-radius:           999px;
   --extra-btn-size:            30px;
 
-  /* ── Progress + volume ─────────────────────────── */
+  /* ── Progress + volume ────────────────────────── */
   --progress-height:        3px;
   --progress-height-hover:  5px;
   --progress-radius:        999px;
@@ -207,41 +205,46 @@ body.theme-paper {
   --volume-height:          3px;
   --volume-height-hover:    5px;
 
-  /* ── Modal ─────────────────────────────────────── */
+  /* ── Modal ────────────────────────────────────── */
   --modal-min-width:     340px;
   --modal-padding:       24px;
   --modal-radius:        12px;
   --modal-border-width:  0px;
   --modal-input-padding: 10px 14px;
 
-  /* ── Context menu ──────────────────────────────── */
+  /* ── Context menu ─────────────────────────────── */
   --context-menu-min-width:         200px;
   --context-menu-profile-min-width: 220px;
   --context-menu-padding:           6px 0;
   --context-menu-row-padding:       9px 18px;
 
-  /* ── Refresh / feed ────────────────────────────── */
+  /* ── Refresh / feed placeholders ──────────────── */
   --refresh-btn-top:        24px;
   --refresh-btn-right:      32px;
   --refresh-btn-size:       32px;
   --empty-state-min-height: 340px;
 
-  /* ── Scrollbar — thin, subtle ──────────────────── */
+  /* ── Scrollbar ────────────────────────────────── */
   --scrollbar-thumb:       rgba(20, 20, 20, 0.15);
   --scrollbar-thumb-hover: rgba(20, 20, 20, 0.3);
   --scrollbar-track:       transparent;
   --scrollbar-border:      rgba(255, 255, 255, 0.8);
 
-  /* ── Extras ────────────────────────────────────── */
+  /* ── Modal / misc extras ──────────────────────── */
   --overlay-blur: none;
+  --body-scrim-opacity: 0.0;
 }
 
 /* ============================================================
    PAPER EDITORIAL EXTRAS
-   Things tokens can't express: hairline separators between
-   rows, active-row pink bar, section header treatment,
-   frosted-glass panes, etc.
+   Hairline separators, frosted-glass panes, active-row accent
+   bar, pill chips. Things tokens can't express.
    ============================================================ */
+
+/* App background */
+body.theme-paper {
+  background-color: #f7f6f4;
+}
 
 /* ── Frosted glass panes ─────────────────────────── */
 body.theme-paper .panel {
@@ -260,12 +263,7 @@ body.theme-paper #top-bar {
   border-bottom: 1px solid var(--line);
 }
 
-/* App background — subtle warm gradient to feel like the ref */
-body.theme-paper {
-  background-color: #f7f6f4;
-}
-
-/* ── Track rows — hairline table, like the reference ── */
+/* ── Track rows — hairline table ─────────────────── */
 body.theme-paper .track-list {
   margin-top: 0;
 }
@@ -277,8 +275,6 @@ body.theme-paper .track-list > div {
 body.theme-paper .track-list > div:hover {
   background: rgba(255, 255, 255, 0.6) !important;
 }
-
-/* Row content — flat, no card fill */
 body.theme-paper .track-row {
   background: transparent;
   border-radius: 6px;
@@ -287,8 +283,6 @@ body.theme-paper .track-row {
 body.theme-paper .track-row:hover {
   background: rgba(255, 255, 255, 0.7);
 }
-
-/* Currently playing — soft rose tint + left accent bar */
 body.theme-paper .track-row--playing {
   background: var(--selection-bg);
   position: relative;
@@ -307,23 +301,17 @@ body.theme-paper .track-row--playing .track-row-index {
   color: var(--accent);
   font-weight: 600;
 }
-
-/* Index numbers — mid-gray mono, mono is right for the ref */
 body.theme-paper .track-row-index {
   font-family: var(--font-body);
   font-size: 12px;
   color: var(--text-faint);
   font-weight: 400;
 }
-
-/* Track titles — semibold, tight */
 body.theme-paper .track-row-title-row span {
   font-weight: 500;
   font-size: 13.5px;
   letter-spacing: -0.005em;
 }
-
-/* Metadata — regular, not mono */
 body.theme-paper .track-row-subtitle {
   font-family: var(--font-body);
   font-size: 12px;
@@ -331,13 +319,11 @@ body.theme-paper .track-row-subtitle {
   margin-top: 1px;
   letter-spacing: 0;
 }
-
-/* Track thumb — small, square with soft corners */
 body.theme-paper .track-row-thumb {
   border-radius: 4px;
 }
 
-/* ── Sidebar — flatter, airier ───────────────────── */
+/* ── Sidebar ─────────────────────────────────────── */
 body.theme-paper .list-item {
   border-radius: 8px;
   padding: 8px 8px;
@@ -355,7 +341,7 @@ body.theme-paper .list-item.selected {
   box-shadow: none;
 }
 
-/* Section headers — big, tight, dark */
+/* ── Section headers ─────────────────────────────── */
 body.theme-paper .section-title {
   font-family: var(--font-display);
   font-weight: 700;
@@ -364,7 +350,7 @@ body.theme-paper .section-title {
   color: var(--text);
 }
 
-/* Chips — pill shape, airier */
+/* ── Chips ───────────────────────────────────────── */
 body.theme-paper .chip {
   border-radius: 999px;
   padding: 6px 14px;
@@ -386,7 +372,7 @@ body.theme-paper .chip.active {
   border-color: var(--text);
 }
 
-/* Library header — smaller, less shouty */
+/* ── Library header ──────────────────────────────── */
 body.theme-paper .library-header h2 {
   font-family: var(--font-body);
   font-weight: 600;
@@ -396,33 +382,27 @@ body.theme-paper .library-header h2 {
   color: var(--text);
 }
 
-/* Album cards — soft float */
+/* ── Album cards ─────────────────────────────────── */
 body.theme-paper .album-card {
-  background: var(--paper);
+  background: rgba(255, 255, 255, 0.123);
   border: 1px solid var(--line);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
 }
 body.theme-paper .album-card:hover {
-  background: var(--panel-strong);
+  background: rgba(255, 255, 255, 0);
   border-color: var(--line);
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
 
-/* Quick items — pill-like softness */
-body.theme-paper .quick-item {
-  border-radius: 10px;
-  background: var(--paper);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-}
-body.theme-paper .quick-item:hover {
-  background: var(--panel-strong);
+/* ── Quick access tiles — hidden on Paper ────────── */
+body.theme-paper .quick-grid {
+  display: none;
 }
 
-/* Player bar — clean, thin, translucent */
+/* ── Player bar — clean, thin, translucent ───────── */
 body.theme-paper #player-bar {
   border-top: 1px solid var(--line);
   border-radius: 0;
@@ -432,8 +412,6 @@ body.theme-paper #player-bar {
   backdrop-filter: blur(28px) saturate(1.4);
   -webkit-backdrop-filter: blur(28px) saturate(1.4);
 }
-
-/* Play button — rose filled pill, like the reference's play */
 body.theme-paper .play-btn {
   background: var(--accent);
   box-shadow: 0 2px 8px rgba(232, 74, 122, 0.25);
@@ -445,26 +423,20 @@ body.theme-paper .play-btn:hover {
 body.theme-paper .play-btn img {
   filter: brightness(0) saturate(100%) invert(100%);
 }
-
-/* Player bar idle — text stays dark */
 body.theme-paper #player-bar:not(.has-track) .play-btn {
   background: var(--accent);
 }
 body.theme-paper #player-bar:not(.has-track) .play-btn img {
   filter: brightness(0) saturate(100%) invert(100%);
 }
-
-/* Progress bar — rose fill */
 body.theme-paper .progress-fill {
   background: var(--accent);
 }
-
-/* Volume fill — dark ink when idle */
 body.theme-paper #player-bar:not(.has-track) .volume-fill {
   background: var(--text);
 }
 
-/* Queue panel — soft translucent */
+/* ── Queue panel ─────────────────────────────────── */
 body.theme-paper #queue-panel {
   backdrop-filter: blur(28px) saturate(1.4);
   -webkit-backdrop-filter: blur(28px) saturate(1.4);
@@ -472,14 +444,14 @@ body.theme-paper #queue-panel {
   border-left: 1px solid var(--line);
 }
 
-/* Modals — soft rounded cards */
+/* ── Modals ──────────────────────────────────────── */
 body.theme-paper .modal-card {
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(28px) saturate(1.4);
   -webkit-backdrop-filter: blur(28px) saturate(1.4);
 }
 
-/* Context menu — same treatment */
+/* ── Context menu ────────────────────────────────── */
 body.theme-paper .context-menu {
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(28px) saturate(1.4);
@@ -497,7 +469,7 @@ body.theme-paper .context-menu-row:hover {
   background: rgba(20, 20, 20, 0.05);
 }
 
-/* Sidebar library icons — thinner, smaller */
+/* ── Sidebar library icons — thinner, smaller ────── */
 body.theme-paper .library-actions img {
   width: 26px;
   height: 26px;
@@ -505,98 +477,4 @@ body.theme-paper .library-actions img {
 body.theme-paper .library-header img {
   width: 32px;
   height: 26px;
-}
-
-
-/* ── Quick access tiles — editorial card treatment ── */
-body.theme-paper .quick-grid {
-  gap: 12px;
-  margin-bottom: 28px;
-}
-
-body.theme-paper .quick-item {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  border: 1px solid rgba(20, 20, 20, 0.06);
-  border-radius: 8px;
-  height: 60px;
-  gap: 0;
-  transition: all 160ms var(--ease);
-  position: relative;
-  overflow: hidden;
-}
-
-body.theme-paper .quick-item:hover {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(20, 20, 20, 0.1);
-  box-shadow: 0 4px 14px rgba(20, 20, 20, 0.06);
-  transform: translateY(-1px);
-}
-
-/* Album art / icon slot — square, fills the left edge */
-body.theme-paper .quick-item .img {
-  width: 60px;
-  height: 60px;
-  border-radius: 0;
-  background: rgba(20, 20, 20, 0.04);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-}
-
-/* Liked Songs heart — proper pink, not faded */
-body.theme-paper .quick-item .item-img--liked {
-  background: linear-gradient(135deg, #e84a7a, #f07a9e);
-  color: #fff;
-}
-
-/* Downloads icon */
-body.theme-paper .quick-item .item-img--downloads {
-  background: linear-gradient(135deg, #5a78e8, #8aa0f0);
-}
-body.theme-paper .quick-item .item-img--downloads img {
-  width: 22px;
-  height: 22px;
-  filter: brightness(0) saturate(100%) invert(100%);
-}
-
-/* Folder */
-body.theme-paper .quick-item .item-img--folder {
-  background: linear-gradient(135deg, #4aa87a, #78c8a0);
-}
-
-/* Title text — proper editorial weight */
-body.theme-paper .quick-item span {
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  color: var(--text);
-  padding: 0 16px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: flex;
-  align-items: center;
-  height: 100%;
-  flex: 1;
-  min-width: 0;
-}
-/* Hide quick-access tiles on Paper — go straight to the feed */
-body.theme-paper .quick-grid {
-  display: none;
-}
-
-/* Lighter album cards — more translucent, frosted */
-body.theme-paper .album-card {
-  background: rgba(255, 255, 255, 0.123);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-}
-
-body.theme-paper .album-card:hover {
-  background: rgba(255, 255, 255, 0);
 }

@@ -1,12 +1,9 @@
 /* ============================================================
-Terminal theme — flat dark, phosphor green accent, mono
-============================================================ */
+   Terminal theme — flat dark, phosphor green accent, mono
+   Reference: CRT terminal, no shadows, no rounding, hairline ink.
+   ============================================================ */
 body.theme-terminal {
 
-
-    --track-playing-text:    #7ec96b;
-    --track-index-width:  32px;
-    --track-index-margin: 16px;
   /* ── Surfaces — flat, near-black ─────────────── */
   --bg:            #0a0a0a;
   --panel:         #0d0d0d;
@@ -20,18 +17,19 @@ body.theme-terminal {
   --text-on-media:     #e8e8e8;
   --text-on-media-dim: rgba(232, 232, 232, 0.6);
   --text-on-media-mute:rgba(232, 232, 232, 0.35);
-  
+  --track-playing-text: #7ec96b;
+
   /* ── Accent — phosphor green ─────────────────── */
   --accent:        #7ec96b;
   --accent-hover:  #93d97f;
   --accent-on-text:#0a0a0a;
-  
+
   /* ── Lines — hairlines only ──────────────────── */
   --line:          rgba(255, 255, 255, 0.06);
   --line-strong:   rgba(255, 255, 255, 0.14);
   --line-ink:      rgba(126, 201, 107, 0.4);
   --line-on-media: rgba(255, 255, 255, 0.12);
-  
+
   /* ── Selection — green tint ──────────────────── */
   --selection-bg:           rgba(126, 201, 107, 0.10);
   --selection-bg-hover:     rgba(126, 201, 107, 0.16);
@@ -40,15 +38,32 @@ body.theme-terminal {
   --selection-inner:        inset 0 0 0 transparent;
   --selection-text:         #7ec96b;
   --selection-text-dim:     rgba(126, 201, 107, 0.7);
-  
+
   /* ── Icons — green-tinted on dark ────────────── */
   --icon-filter:         brightness(0) saturate(100%) invert(75%) sepia(30%) saturate(500%) hue-rotate(60deg) brightness(95%);
   --icon-filter-accent:  brightness(0) saturate(100%) invert(75%) sepia(60%) saturate(500%) hue-rotate(60deg) brightness(100%);
   --icon-filter-inverse: brightness(0) saturate(100%) invert(85%) sepia(20%) saturate(400%) hue-rotate(60deg) brightness(90%);
   --icon-filter-success: brightness(0) saturate(100%) invert(75%) sepia(60%) saturate(500%) hue-rotate(60deg) brightness(100%);
   --icon-filter-muted:   invert(0.5);
-  
-  /* ── Shadows — flat ──────────────────────────── */
+
+  /* ── Semantic ─────────────────────────────────── */
+  --success: #7ec96b;
+  --warning: #e2a000;
+  --danger:  #c25b4a;
+
+  /* ── Typography — all mono ───────────────────── */
+  --font-display: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+  --font-body:    'IBM Plex Mono', ui-monospace, monospace;
+
+  /* ── Radius — near-sharp ─────────────────────── */
+  --radius:      0px;
+  --radius-sm:   0px;
+  --radius-md:   0px;
+  --radius-lg:   0px;
+  --radius-pill: 2px;
+
+  /* ── Shadows — flat, none ────────────────────── */
   --shadow-sm: 0 0 0 transparent;
   --shadow-md: 0 0 0 transparent;
   --shadow-lg: 0 0 0 transparent;
@@ -66,44 +81,48 @@ body.theme-terminal {
   --player-backdrop-brightness: 0.25;
   --player-backdrop-scrim: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.8) 100%);
 
-  /* ── Component-specific ──────────────────────── */
+  /* ── Overlays / backgrounds ───────────────────── */
   --accent-bg-faint:  rgba(126, 201, 107, 0.08);
   --overlay-scrim:    rgba(0, 0, 0, 0.75);
   --queue-current-bg: rgba(126, 201, 107, 0.10);
 
-  /* ── Typography — all mono ───────────────────── */
-  --font-display: 'IBM Plex Mono', ui-monospace, monospace;
-  --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
-  --font-body:    'IBM Plex Mono', ui-monospace, monospace;
+  /* ── Panel shell — flat, no borders ──────────── */
+  --panel-border-width: 0px;
+  --panel-border-style: solid;
+  --panel-radius:       0px;
 
-  /* ── Tighter radii — near-sharp ──────────────── */
-  --radius:      0px;
-  --radius-sm:   0px;
-  --radius-md:   0px;
-  --radius-lg:   0px;
-  --radius-pill: 2px;
+  /* ── List items ───────────────────────────────── */
+  --list-item-border-width: 0px;
 
-  /* ── Structural overrides — flat layout ──────── */
-  --panel-border-width:        0px;
-  --panel-radius:              0px;
-  --list-item-border-width:    0px;
-  --album-card-border-width:   0px;
-  --album-card-padding:        8px 0;
-  --player-border-width:       1px;
-  --player-radius:             0px;
-  --track-row-height:          48px;
-  --track-row-padding:         8px 0;
-  --track-list-margin-top:     12px;
-  --track-index-width:         32px;
-  --track-index-margin:        12px;
-  --progress-height:           2px;
-  --progress-height-hover:     4px;
-  --progress-radius:           0px;
-  --progress-fill-bg:          var(--accent);
-  --progress-fill-bg-idle:     var(--accent);
+  /* ── Album cards — flat, no borders ──────────── */
+  --album-card-border-width: 0px;
+  --album-card-padding:      8px 0;
 
+  /* ── Track rows — compact, no gaps ───────────── */
+  --track-row-height:      48px;
+  --track-row-padding:     8px 0;
+  --track-list-margin-top: 12px;
+  --track-index-width:     32px;
+  --track-index-margin:    12px;
 
+  /* ── Player bar ───────────────────────────────── */
+  --player-border-width: 1px;
+  --player-radius:       0px;
+
+  /* ── Progress bar — thin, no radius ──────────── */
+  --progress-height:       2px;
+  --progress-height-hover: 4px;
+  --progress-radius:       0px;
+  --progress-fill-bg:      var(--accent);
+  --progress-fill-bg-idle: var(--accent);
 }
+
+/* ============================================================
+   TERMINAL EXTRAS
+   The index column is a signature of the theme — force it
+   visible with a hardcoded mono-friendly width.
+   ============================================================ */
+
 body.theme-terminal .track-row-index {
   display: inline-block;
   min-width: 32px;
