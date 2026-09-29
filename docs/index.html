@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Audos — Your music, mapped.</title>
-<meta name="description" content="A local-first desktop music player with YouTube streaming, offline downloads and five themes. Free, open source, no accounts.">
+<meta name="description" content="A local-first desktop music player with YouTube streaming, offline downloads and seamless library management. Free, open source, no accounts.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -13,9 +13,11 @@
 --fd:'Bricolage Grotesque',Impact,sans-serif;--fb:'Instrument Sans',-apple-system,'Segoe UI',sans-serif;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 [data-skin=midnight]{--bg:#0d0d0f;--panel:#151518;--card:#1d1d21;--text:#efeae4;--dim:#a29b92;--line:rgba(255,255,255,.1);--accent:#ff8a3d;--on:#1a0d02}
-[data-skin=nord]{--bg:#2e3440;--panel:#3b4252;--card:#434c5e;--text:#eceff4;--dim:#b0bacb;--line:rgba(236,239,244,.14);--accent:#88c0d0;--on:#1f2933}
 [data-skin=terminal]{--bg:#0a0a0a;--panel:#0d0d0d;--card:#161616;--text:#d4d4d4;--dim:#8a8a8a;--line:rgba(255,255,255,.12);--accent:#7ec96b;--on:#0a0a0a;--r:0px;--rp:0px;--fd:'IBM Plex Mono',monospace;--fb:'IBM Plex Mono',monospace}
 [data-skin=glacier]{--bg:#1a2a35;--panel:#1f313d;--card:#253744;--text:#d6e5ec;--dim:#8ba5b3;--line:rgba(214,229,236,.14);--accent:#5dc6d2;--on:#0f2229}
+[data-skin=sakura]{--bg:#fff0f5;--panel:#ffe4e1;--card:#fff;--text:#4a3b42;--dim:#9c7c88;--line:rgba(219,112,147,.2);--accent:#db7093;--on:#fff}
+[data-skin=deepforest]{--bg:#121a14;--panel:#1a261d;--card:#223326;--text:#e0e8e2;--dim:#8f9e93;--line:rgba(255,255,255,.1);--accent:#4caf50;--on:#000}
+[data-skin=nightbloom]{--bg:#0f0914;--panel:#160d1f;--card:#1e122b;--text:#e8dff0;--dim:#9f8eb0;--line:rgba(255,255,255,.1);--accent:#b388ff;--on:#14081c}
 *{box-sizing:border-box;margin:0}
 html{background:var(--bg);scroll-behavior:smooth;scroll-padding-top:calc(72px + env(safe-area-inset-top,0px))}
 body{font:16px/1.6 var(--fb);color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
@@ -58,12 +60,13 @@ h1{font:800 clamp(48px,7.5vw,92px)/.94 var(--fd);letter-spacing:-.035em}
 .main h5{font:800 22px var(--fd);letter-spacing:-.02em;margin-bottom:12px}
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .tile{display:flex;gap:8px;align-items:center;padding:8px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);font-size:13px}
-.row{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.row{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;padding:7px 8px;border-bottom:1px solid var(--line);font-size:13px;cursor:pointer;border-radius:calc(var(--r)/2);transition:background-color .2s}
+.row:hover{background:color-mix(in srgb,var(--accent) 8%,transparent)}
 .row b{font-weight:600;display:block;line-height:1.3}.row span{color:var(--dim);font-size:12px}
 .row.now b{color:var(--accent)}
 .row em{font-style:normal;color:var(--dim);font-size:12px}
 .player{display:flex;align-items:center;gap:14px;padding:12px 16px;border-top:1px solid var(--line);background:var(--card);font-size:12px}
-.play{width:34px;height:34px;flex:none;border-radius:var(--rp);background:var(--accent);color:var(--on);display:grid;place-items:center;font-size:12px}
+.play{width:34px;height:34px;flex:none;border-radius:var(--rp);background:var(--accent);color:var(--on);display:grid;place-items:center;font-size:12px;cursor:pointer;user-select:none}
 .bar{flex:1;height:4px;background:var(--line);border-radius:var(--rp);overflow:hidden}
 .bar i{display:block;height:100%;background:var(--accent);animation:prog 40s linear infinite}
 @keyframes prog{from{width:8%}to{width:100%}}
@@ -87,6 +90,14 @@ code{font:500 14px 'IBM Plex Mono',monospace}
 .cols h3{font:800 22px var(--fd);margin-bottom:12px}
 .cols ol,.cols ul{padding-left:20px;color:var(--dim);display:grid;gap:8px}
 .cols li::marker{color:var(--accent)}
+.dlgroup{position:relative;display:inline-flex}
+.dlmain{border-top-right-radius:0;border-bottom-right-radius:0;white-space:nowrap}
+.dlcaret{border-top-left-radius:0;border-bottom-left-radius:0;border-left:1px solid color-mix(in srgb,var(--on) 30%,transparent);padding:14px 16px}
+.dlmenu{position:absolute;top:calc(100% + 8px);left:0;min-width:280px;max-height:280px;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 24px 50px -20px rgba(0,0,0,.5);padding:6px;z-index:30}
+.dlmenu a{display:flex;justify-content:space-between;gap:14px;align-items:baseline;padding:9px 10px;border-radius:calc(var(--r) - 2px);font-size:13px;text-decoration:none;color:var(--text)}
+.dlmenu a:hover,.dlmenu a:focus-visible{background:var(--panel)}
+.dlmenu .pre{color:var(--dim);font-size:11px;white-space:nowrap}
+.dlnote{font-size:13px;color:var(--dim);margin-top:6px}
 footer{padding:48px 0 64px;color:var(--dim);font-size:14px;border-top:1px solid var(--line)}
 footer .wrap{display:flex;flex-wrap:wrap;gap:16px 32px;justify-content:space-between}
 @media(prefers-reduced-motion:reduce){body *{transition:none}.bar i{animation:none;width:40%}html{scroll-behavior:auto}}
@@ -104,10 +115,14 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:16px 32px;justify-content:space-bet
 <h1>Your music, mapped.</h1>
 <p class="lead">Audos is a desktop player that treats your local folders and YouTube as one library. Search anything, play it instantly, keep what you love. No accounts, no cloud, no telemetry.</p>
 <div class="cta">
-<a class="btn p" href="https://github.com/soham-exe/audos/releases/latest/download/Audos_0.1.2_x64-setup.exe">Download for Windows</a>
+<div class="dlgroup">
+<a class="btn p dlmain" id="dlmain-hero" href="https://github.com/soham-exe/audos/releases/latest">Download for Windows</a>
+<button class="btn p dlcaret" id="dlcaret-hero" aria-haspopup="listbox" aria-expanded="false" aria-label="Other versions">▾</button>
+<div class="dlmenu" id="dlmenu-hero" role="listbox" hidden></div>
+</div>
 <a class="btn" href="https://github.com/soham-exe/audos">View on GitHub</a>
 </div>
-<p class="meta">Windows 10 and 11 · Free and open source (GPL-3.0)</p>
+<p class="meta" id="dlmeta-hero">Windows 10 and 11 · Free and open source (GPL-3.0)</p>
 <p class="try">Try a theme. This whole page changes with it.</p>
 <div class="chips" id="chips"></div>
 </div>
@@ -124,27 +139,29 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:16px 32px;justify-content:space-bet
 <div class="main">
 <h5>Good evening</h5>
 <div class="tiles"><div class="tile"><span class="th g1"></span>Liked Songs</div><div class="tile"><span class="th g2"></span>Downloads</div><div class="tile"><span class="th g3"></span>Lo-fi Beats</div><div class="tile"><span class="th g3"></span>Jazz Nights</div></div>
-<div class="row now"><span class="th g1" style="width:32px;height:32px"></span><div><b>Night Drive</b><span>Kessa</span></div><em>3:42</em></div>
-<div class="row"><span class="th g2" style="width:32px;height:32px"></span><div><b>Paper Lanterns</b><span>Marlow Park</span></div><em>4:05</em></div>
-<div class="row"><span class="th g3" style="width:32px;height:32px"></span><div><b>Slow Tide</b><span>On your disk · FLAC</span></div><em>2:58</em></div>
-<div class="row"><span class="th g3" style="width:32px;height:32px"></span><div><b>Glass Hours</b><span>From YouTube</span></div><em>5:11</em></div>
+<div class="row now" data-title="You Rock My World" data-time="3:42" data-src="resources\Michael Jackson - You Rock My World.webm"><span class="th g1" style="width:32px;height:32px"></span><div><b>You Rock My World</b><span>Micheal Jackson</span></div><em>3:42</em></div>
+<div class="row" data-title="Shape Of You x Naina" data-time="4:05" data-src="resources\ShapeOfYouxNaina.mp3"><span class="th g2" style="width:32px;height:32px"></span><div><b>Shape Of You x Naina</b><span>Luke Willies</span></div><em>4:05</em></div>
+<div class="row" data-title="For A Reason" data-time="2:58" data-src="resources\For A Reason.mp3"><span class="th g3" style="width:32px;height:32px"></span><div><b>For A Reason</b><span>On your disk · FLAC</span></div><em>2:58</em></div>
+<div class="row" data-title="Starboy" data-time="5:11" data-src="resources\Starboy.mp3"><span class="th g3" style="width:32px;height:32px"></span><div><b>Starboy</b><span>From Online Resource</span></div><em>5:11</em></div>
+<div class="row" data-title="When B On Tha Mic" data-time="3:15" data-src="resources\When B On Tha Mic.mp3"><span class="th g1" style="width:32px;height:32px"></span><div><b>When B On Tha Mic</b><span>Rakim</span></div><em>3:15</em></div>
 </div>
 </div>
-<div class="player"><span class="play">▶</span><span>Night Drive</span><div class="bar"><i></i></div><span>3:42</span></div>
+<!-- Progress Bar Container -->
+<div class="player"><span class="play" id="play-btn" role="button" tabindex="0">▶</span><span id="now-playing-title">You Rock My World</span><div class="bar"><i id="progress-bar"></i></div><span id="now-playing-time">3:42</span></div>
 </div>
 </div>
 
 <div class="wrap" id="features">
 <section>
 <h2>One library for what you own and what you find.</h2>
-<div class="f"><div><h3>Library</h3><p>Point it at a folder and it does the rest.</p></div>
-<ul><li><b>Scans local folders.</b> MP3, FLAC, M4A, WAV, OGG, Opus, AAC and WMA, read recursively.</li><li><b>Reads your tags.</b> Title, artist, album and embedded cover art.</li><li><b>Keeps itself tidy.</b> New files appear, deleted files disappear.</li><li><b>Liked Songs and Downloads</b> fill themselves in.</li></ul></div>
-<div class="f"><div><h3>Streaming</h3><p>Search YouTube from the same bar you search your files with.</p></div>
-<ul><li><b>Stream without downloading.</b> A local proxy keeps seeking and buffering smooth.</li><li><b>Download your way.</b> Save tracks automatically as you play, or choose track by track.</li><li><b>Radio mode.</b> When the queue runs out, Audos finds related tracks and keeps going.</li></ul></div>
+<div class="f"><div><h3>Seamless Listening</h3><p>Stream smoothly, download instantly, and build your library without interruptions.</p></div>
+<ul><li><b>Instant Playback.</b> Stream your favorite tracks seamlessly without buffering delays or manual setups.</li><li><b>Auto-downloads.</b> Let Audos automatically download tracks in the background as you listen, ensuring everything feels like a unified library.</li><li><b>Radio mode.</b> When the queue runs out, Audos finds related tracks and keeps going seamlessly.</li></ul></div>
+<div class="f"><div><h3>Library Management</h3><p>Point it at a folder and it does the rest.</p></div>
+<ul><li><b>Scans local folders.</b> MP3, FLAC, M4A, WAV, OGG, Opus, AAC and WMA, read recursively.</li><li><b>Reads your tags.</b> Title, artist, album and embedded cover art.</li><li><b>Keeps itself tidy.</b> New files appear, deleted files disappear dynamically.</li></ul></div>
 <div class="f"><div><h3>Playback</h3><p>Built for keeping a session moving.</p></div>
 <ul><li><b>A real queue.</b> Drag to reorder, drag to append, click to jump.</li><li><b>Shuffle, repeat and volume</b> with repeat off, all or one.</li><li><b>Keyboard shortcuts.</b> Space plays and pauses, Ctrl+←/→ skips, Ctrl+/ focuses search.</li></ul></div>
-<div class="f"><div><h3>Interface</h3><p>Five themes, and it's one CSS file to add yours.</p></div>
-<ul><li><b>Paper, Midnight, Nord, Terminal and Glacier.</b> Pick one from the profile menu.</li><li><b>Make it yours.</b> Use any image or video as the backdrop, and any picture as your avatar.</li><li><b>Fast at any size.</b> A local SQLite database and a virtualized track list keep large libraries instant.</li></ul></div>
+<div class="f"><div><h3>Interface</h3><p>Seven polished themes, and it's one CSS file to add yours.</p></div>
+<ul><li><b>Beautifully styled.</b> Switch between Paper, Midnight, Terminal, Glacier, Sakura, Deep Forest, and Nightbloom directly from the profile menu.</li><li><b>Make it yours.</b> Use any image or video as the backdrop, and any picture as your avatar.</li><li><b>Fast at any size.</b> A local SQLite database and a virtualized track list keep large libraries instant.</li></ul></div>
 </section>
 </div>
 
@@ -156,12 +173,20 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:16px 32px;justify-content:space-bet
 <div class="wrap" id="download">
 <section>
 <h2>Get Audos for Windows.</h2>
-<div class="cta" style="margin-bottom:32px"><a class="btn p" href="https://github.com/soham-exe/audos/releases/latest/download/Audos_0.1.2_x64-setup.exe">Download the latest installer</a><a class="btn" href="https://github.com/soham-exe/audos">Build from source</a></div>
-<div class="inst"><code>Audos_x64-setup.exe</code><span style="color:var(--dim)">Fast install, clean uninstall. Best for most people.</span><span class="tag">Recommended</span></div>
-<div class="inst"><code>Audos_x64_en-US.msi</code><span style="color:var(--dim)">For system-wide installs and group policy deployment.</span><span></span></div>
+<div class="cta" style="margin-bottom:8px">
+<div class="dlgroup">
+<a class="btn p dlmain" id="dlmain-dl" href="https://github.com/soham-exe/audos/releases/latest">Download the latest installer</a>
+<button class="btn p dlcaret" id="dlcaret-dl" aria-haspopup="listbox" aria-expanded="false" aria-label="Other versions">▾</button>
+<div class="dlmenu" id="dlmenu-dl" role="listbox" hidden></div>
+</div>
+<a class="btn" href="https://github.com/soham-exe/audos">Build from source</a>
+</div>
+<p class="dlnote">Version and links are pulled live from GitHub releases each time this page loads.</p>
+<div class="inst"><code id="dlfname">Setup installer (.exe)</code><span style="color:var(--dim)">Fast install, clean uninstall. Best for most people.</span><span class="tag">Recommended</span></div>
+<div class="inst" id="dlfrow-msi" hidden><code id="dlfname-msi">Windows Installer (.msi)</code><span style="color:var(--dim)">For system-wide installs and group policy deployment.</span><a class="tag" id="dlmsi-link" href="#" style="text-decoration:none">Download</a></div>
 <div class="cols">
-<div><h3>Before you install</h3><ul><li>Windows 10 or 11, 64-bit.</li><li>About 150 MB of disk space, including the yt-dlp binary downloaded on first run.</li><li>An internet connection for streaming and updates.</li><li>SmartScreen may warn on first run. Choose More info, then Run anyway.</li><li>macOS and Linux builds aren't available yet.</li></ul></div>
-<div><h3>First launch</h3><ol><li>Audos downloads yt-dlp once, about 100 MB. After that it opens instantly.</li><li>Click ➕ in the sidebar and pick a music folder.</li><li>Search for anything. Your library comes first, then YouTube.</li><li>Right-click the profile button for themes, download mode and backgrounds.</li></ol></div>
+<div><h3>Before you install</h3><ul><li>Windows 10 or 11, 64-bit.</li><li>Minimal disk space footprint for your local library.</li><li>An internet connection for streaming and updates.</li><li>SmartScreen may warn on first run. Choose More info, then Run anyway.</li><li>macOS and Linux builds aren't available yet.</li></ul></div>
+<div><h3>First launch</h3><ol><li>Audos opens instantly, ready to play your music.</li><li>Click ➕ in the sidebar and pick a music folder.</li><li>Search for anything. Your library comes first, then YouTube.</li><li>Right-click the profile button for themes, download mode and backgrounds.</li></ol></div>
 </div>
 </section>
 </div>
@@ -172,13 +197,130 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:16px 32px;justify-content:space-bet
 <span><a href="https://github.com/soham-exe/audos">Star it on GitHub</a> · <a href="https://github.com/soham-exe/audos/issues">Report a bug</a> · <a href="https://github.com/soham-exe/audos/blob/main/THEMES.md">Write a theme</a></span>
 </div></footer>
 
+<audio id="demo-audio" src="https://actions.google.com/sounds/v1/water/rain_on_roof.ogg" preload="none"></audio>
+
 <script>
-var S=[['paper','Paper','#d8432e'],['midnight','Midnight','#ff8a3d'],['nord','Nord','#88c0d0'],['terminal','Terminal','#7ec96b'],['glacier','Glacier','#5dc6d2']];
+var S=[['paper','Paper','#d8432e'],['midnight','Midnight','#ff8a3d'],['terminal','Terminal','#7ec96b'],['glacier','Glacier','#5dc6d2'],['sakura','Sakura','#db7093'],['deepforest','Deep Forest','#4caf50'],['nightbloom','Nightbloom','#b388ff']];
 var root=document.documentElement,box=document.getElementById('chips');
 function pick(n){root.setAttribute('data-skin',n);[].forEach.call(box.children,function(b){b.setAttribute('aria-pressed',b.dataset.n===n)})}
 S.forEach(function(s){var b=document.createElement('button');b.className='chip';b.dataset.n=s[0];b.innerHTML='<i style="background:'+s[2]+'"></i>'+s[1];b.onclick=function(){pick(s[0])};box.appendChild(b)});
 var t=root.getAttribute('data-theme');
 pick(t==='light'?'paper':t==='dark'?'glacier':(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'glacier':'paper'));
+
+var pbar = document.getElementById('progress-bar');
+var currentThemeIdx = 0;
+if (pbar) {
+  pbar.addEventListener('animationiteration', function() {
+    currentThemeIdx = (currentThemeIdx + 1) % S.length;
+    pick(S[currentThemeIdx][0]);
+  });
+}
+
+var rows = document.querySelectorAll('.main .row');
+var nowTitle = document.getElementById('now-playing-title');
+var nowTime = document.getElementById('now-playing-time');
+var playBtn = document.getElementById('play-btn');
+var demoAudio = document.getElementById('demo-audio');
+
+rows.forEach(function(row) {
+  row.addEventListener('click', function() {
+    rows.forEach(function(r) { r.classList.remove('now'); });
+    row.classList.add('now');
+
+    var title = row.getAttribute('data-title');
+    var time = row.getAttribute('data-time');
+    var src = row.getAttribute('data-src');
+
+    if (nowTitle) nowTitle.textContent = title;
+    if (nowTime) nowTime.textContent = time;
+
+    if (pbar) {
+      pbar.style.animation = 'none';
+      void pbar.offsetWidth;
+      pbar.style.animation = 'prog 40s linear infinite';
+    }
+
+    if (demoAudio && src) {
+      demoAudio.src = src;
+      demoAudio.play();
+      if (playBtn) playBtn.textContent = '⏸';
+    }
+  });
+});
+
+if (playBtn && demoAudio) {
+  playBtn.addEventListener('click', function() {
+    if (demoAudio.paused) {
+      demoAudio.play();
+      playBtn.textContent = '⏸';
+    } else {
+      demoAudio.pause();
+      playBtn.textContent = '▶';
+    }
+  });
+}
+
+(function(){
+var REPO='soham-exe/audos';
+function fmtDate(iso){try{return new Date(iso).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});}catch(e){return '';}}
+function wire(prefix){
+  var main=document.getElementById('dlmain-'+prefix),caret=document.getElementById('dlcaret-'+prefix),menu=document.getElementById('dlmenu-'+prefix);
+  if(!main||!caret||!menu)return null;
+  function close(){menu.hidden=true;caret.setAttribute('aria-expanded','false');}
+  function open(){menu.hidden=false;caret.setAttribute('aria-expanded','true');}
+  caret.addEventListener('click',function(e){e.stopPropagation();menu.hidden?open():close();});
+  document.addEventListener('click',function(e){if(!menu.hidden&&!menu.contains(e.target)&&e.target!==caret)close();});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
+  return {main:main,menu:menu};
+}
+function fillMenu(menu,list){
+  menu.innerHTML='';
+  list.forEach(function(r){
+    var a=document.createElement('a');
+    a.href=r.asset.browser_download_url;a.setAttribute('role','option');
+    var l=document.createElement('span');l.textContent=r.name;
+    var rr=document.createElement('span');rr.className='pre';rr.textContent=r.prerelease?'Pre-release':fmtDate(r.published_at);
+    a.appendChild(l);a.appendChild(rr);menu.appendChild(a);
+  });
+}
+async function init(){
+  var hero=wire('hero'),dl=wire('dl');
+  try{
+    var res=await fetch('https://api.github.com/repos/'+REPO+'/releases');
+    if(!res.ok)throw new Error('bad status');
+    var releases=await res.json();
+    var usable=releases.filter(function(r){return !r.draft;}).map(function(r){
+      var assets=r.assets||[];
+      return {
+        tag:r.tag_name,
+        name:r.name||r.tag_name,
+        prerelease:r.prerelease,
+        published_at:r.published_at,
+        asset:assets.find(function(a){return /x64-setup\.exe$/i.test(a.name);}),
+        msi:assets.find(function(a){return /\.msi$/i.test(a.name);})
+      };
+    }).filter(function(r){return r.asset;});
+    if(!usable.length)return;
+    var latest=usable[0];
+    [hero,dl].forEach(function(c){if(c){c.main.href=latest.asset.browser_download_url;fillMenu(c.menu,usable);}});
+    if(hero)hero.main.textContent='Download '+latest.tag+' for Windows';
+    if(dl)dl.main.textContent='Download '+latest.tag+' for Windows';
+    var meta=document.getElementById('dlmeta-hero');
+    if(meta)meta.textContent=latest.tag+' · Windows 10 and 11 · Free and open source (GPL-3.0)';
+    var fname=document.getElementById('dlfname');
+    if(fname)fname.textContent=latest.asset.name;
+    var frow=document.getElementById('dlfrow-msi');
+    if(frow){
+      if(latest.msi){
+        frow.hidden=false;
+        var mcode=document.getElementById('dlfname-msi');if(mcode)mcode.textContent=latest.msi.name;
+        var mlink=document.getElementById('dlmsi-link');if(mlink)mlink.href=latest.msi.browser_download_url;
+      }else{frow.hidden=true;}
+    }
+  }catch(e){}
+}
+init();
+})();
 </script>
 </body>
 </html>
