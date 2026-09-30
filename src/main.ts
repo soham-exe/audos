@@ -5,6 +5,73 @@ import { open, confirm as tauriConfirm, message as tauriMessage } from '@tauri-a
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 
+// ==========================================
+// Country list for region selection
+// ==========================================
+const COUNTRY_OPTIONS: string[] = [
+    'Global',           // no region filter — the default
+    'United States',
+    'United Kingdom',
+    'Canada',
+    'Australia',
+    'India',
+    'Bangladesh',
+    'Sri Lanka',
+    'Nepal',
+    'Japan',
+    'South Korea',
+    'China',
+    'Taiwan',
+    'Hong Kong',
+    'Singapore',
+    'Malaysia',
+    'Indonesia',
+    'Philippines',
+    'Thailand',
+    'Vietnam',
+    'Germany',
+    'France',
+    'Italy',
+    'Spain',
+    'Portugal',
+    'Netherlands',
+    'Belgium',
+    'Switzerland',
+    'Austria',
+    'Sweden',
+    'Norway',
+    'Denmark',
+    'Finland',
+    'Poland',
+    'Czech Republic',
+    'Hungary',
+    'Romania',
+    'Greece',
+    'Ireland',
+    'Russia',
+    'Ukraine',
+    'Turkey',
+    'Egypt',
+    'Saudi Arabia',
+    'United Arab Emirates',
+    'Israel',
+    'South Africa',
+    'Nigeria',
+    'Kenya',
+    'Ghana',
+    'Morocco',
+    'Brazil',
+    'Mexico',
+    'Argentina',
+    'Chile',
+    'Colombia',
+    'Peru',
+    'Venezuela',
+    'New Zealand',
+];
+
+// Cached in-memory copy of the user's selected region
+let userRegion: string = localStorage.getItem('audos_region') || 'Global';
 
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
@@ -229,7 +296,14 @@ let isPlaying = false;
 let proxyPort: number | null = null;
 let downloadMode = localStorage.getItem('download_mode') || 'stream';
 
-
+// Global rate-limit flag — set when we detect a 429 from the proxy.
+// Prevents background prefetch / aggressive fetches until things cool down.
+declare global {
+    interface Window {
+        __audosRateLimited?: boolean;
+    }
+}
+window.__audosRateLimited = false;
 
 // ==========================================
 // Sidebar Collapse
@@ -604,8 +678,8 @@ let totalCategoryCount = 0;
 let loadingMore = false;
 
 const INITIAL_BATCH_SIZE = 1;
-const LOAD_MORE_BATCH_SIZE = 3;
-const BACKGROUND_BATCH_SIZE = 5;
+const LOAD_MORE_BATCH_SIZE = 2;
+const BACKGROUND_BATCH_SIZE = 2;
 
 // Highest category index that's been prefetched (or is being prefetched)
 let prefetchingUpTo = 0;
@@ -877,8 +951,17 @@ function renderHomeView() {
                 homeFeedTimestamp = Date.now();
             }
 
+            // Clear once before the loop (only for fresh, non-append loads)
             if (!append) feedsContainer.innerHTML = '';
-            renderFeeds(feeds, feedsContainer);
+
+            // Stream categories to the UI as each one arrives
+            for (const feed of feeds) {
+                if (myToken !== homeRenderToken) return;
+                renderFeeds([feed], feedsContainer);
+                // Let the browser paint between categories
+                await new Promise(r => requestAnimationFrame(r));
+            }
+
             loadedCategoryCount = end;
             updateLoadMoreButton(feedsContainer);
         } catch (e) {
@@ -945,7 +1028,7 @@ function renderHomeView() {
         // Kick off a background prefetch for whatever comes next
         setTimeout(() => {
             prefetchBatch(loadedCategoryCount, loadedCategoryCount + BACKGROUND_BATCH_SIZE);
-        }, 1500);
+        }, 6000);
     } else {
         // No valid cache — fetch a small initial batch for a fast first paint
         console.log('[home] Cache miss — fetching initial batch');
@@ -953,7 +1036,7 @@ function renderHomeView() {
             // Once the initial 3 render, quietly fetch the next 8
             setTimeout(() => {
                 prefetchBatch(INITIAL_BATCH_SIZE, INITIAL_BATCH_SIZE + BACKGROUND_BATCH_SIZE);
-            }, 1500);
+            }, 6000);
         });
     }
 }
@@ -1443,6 +1526,10 @@ async function playTrack(index: number) {
     audio.addEventListener('canplay', clearThumbLoading, { once: true });
     audio.addEventListener('error', async () => {
         albumArtEl.classList.remove('loading');
+        // If it looks like a rate-limit, back off and flag it
+        console.warn('[play] stream failed, might be rate-limited');
+        window.__audosRateLimited = true;
+        setTimeout(() => { window.__audosRateLimited = false; }, 60_000); // clear after 60s
 
         // Only try the alternative for YouTube streams
         if (track.source_type !== 'youtube_stream') return;
@@ -1487,20 +1574,19 @@ async function playTrack(index: number) {
     // ── Prefetch the next track's stream URL in the background ──
     // Runs ~2 seconds after playback starts so it doesn't compete
     // with the current track's initial buffering.
-    if (currentIndex + 1 < queue.length && proxyPort) {
+    // Only prefetch if we're not currently rate-limited
+    if (currentIndex + 1 < queue.length && proxyPort && !window.__audosRateLimited) {
         const next = queue[currentIndex + 1];
         if (next.source_type === 'youtube_stream') {
             setTimeout(() => {
-                // Only prefetch if the user hasn't already moved on
                 if (currentIndex + 1 >= queue.length) return;
                 if (queue[currentIndex + 1]?.id !== next.id) return;
+                if (window.__audosRateLimited) return;
 
                 fetch(`http://127.0.0.1:${proxyPort}/stream?yt_id=${next.file_path_or_url}`, {
                     headers: { 'Range': 'bytes=0-1023' }
-                }).catch(() => {
-                    // Silent — prefetch failure is harmless
-                });
-            }, 2000);
+                }).catch(() => {});
+            }, 4000);
         }
     }
     isPlaying = true;
@@ -2448,6 +2534,126 @@ profileBtn?.addEventListener('contextmenu', (e) => {
         document.body.style.backgroundColor = '';
     }));
 
+        // ── Region picker ──
+    const sepRegion = document.createElement('div');
+    sepRegion.className = 'context-menu-sep';
+    menu.appendChild(sepRegion);
+
+    const regionHeader = document.createElement('div');
+    regionHeader.className = 'context-menu-header';
+    regionHeader.textContent = 'Region';
+    menu.appendChild(regionHeader);
+
+    const regionRow = document.createElement('div');
+    regionRow.className = 'context-menu-field';
+
+    const regionInput = document.createElement('input');
+    regionInput.type = 'text';
+    regionInput.className = 'region-input';
+    regionInput.placeholder = 'Type to search…';
+    regionInput.value = userRegion;
+    regionInput.setAttribute('list', 'region-datalist');
+
+    const regionDatalist = document.createElement('datalist');
+    regionDatalist.id = 'region-datalist';
+    for (const c of COUNTRY_OPTIONS) {
+        const opt = document.createElement('option');
+        opt.value = c;
+        regionDatalist.appendChild(opt);
+    }
+
+    const commitRegion = async (raw: string) => {
+        const value = raw.trim();
+
+        // Empty or unrecognized → default to Global
+        const finalValue = COUNTRY_OPTIONS.includes(value) ? value : 'Global';
+
+        if (finalValue === userRegion) return;
+
+        userRegion = finalValue;
+        localStorage.setItem('audos_region', finalValue);
+
+        try {
+            await invoke('set_user_region', { region: finalValue });
+        } catch (e) {
+            console.warn('[region] failed to set in backend:', e);
+        }
+
+        // Clear the frontend cache AND tell the user we refreshed
+        clearHomeCache();
+
+        // If we're on the home view, re-render immediately
+        if (!isShowingPlaylist && searchInput.value.trim() === '') {
+            renderHomeView();
+        }
+    };
+
+    // Given whatever the user typed, find the best matching country.
+    // Preference order:
+    //   1. Exact match (case-insensitive)
+    //   2. Starts-with match (first in list)
+    //   3. Contains match (first in list)
+    //   4. null if nothing matches
+    const findBestMatch = (input: string): string | null => {
+        const q = input.trim().toLowerCase();
+        if (!q) return null;
+
+        const exact = COUNTRY_OPTIONS.find(c => c.toLowerCase() === q);
+        if (exact) return exact;
+
+        const startsWith = COUNTRY_OPTIONS.find(c => c.toLowerCase().startsWith(q));
+        if (startsWith) return startsWith;
+
+        const contains = COUNTRY_OPTIONS.find(c => c.toLowerCase().includes(q));
+        if (contains) return contains;
+
+        return null;
+    };
+
+    regionInput.addEventListener('change', () => {
+        // Only commit on change if what's typed is a real match.
+        // Otherwise leave it — the user might still be typing.
+        const match = findBestMatch(regionInput.value);
+        if (match) {
+            regionInput.value = match;
+            commitRegion(match);
+        }
+    });
+
+    regionInput.addEventListener('blur', () => {
+        // On blur, snap to a match if possible; if not, reset to current region
+        const match = findBestMatch(regionInput.value);
+        if (match) {
+            regionInput.value = match;
+            commitRegion(match);
+        } else {
+            regionInput.value = userRegion;
+        }
+    });
+
+    regionInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const match = findBestMatch(regionInput.value);
+            if (match) {
+                regionInput.value = match;
+                commitRegion(match);
+            } else {
+                // Nothing matched — revert and don't commit
+                regionInput.value = userRegion;
+            }
+            regionInput.blur();
+        }
+        if (e.key === 'Escape') {
+            regionInput.value = userRegion;
+            regionInput.blur();
+        }
+    });
+
+    regionRow.appendChild(regionInput);
+    regionRow.appendChild(regionDatalist);
+    menu.appendChild(regionRow);
+
     // ── Theme picker ──
     const sep2 = document.createElement('div');
     sep2.className = 'context-menu-sep';
@@ -2552,6 +2758,12 @@ window.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error("Startup scan failed:", pl.folderPath);
         }
+    }
+    // Push the saved region to the Rust backend so queries are region-aware
+    try {
+        await invoke('set_user_region', { region: userRegion });
+    } catch (e) {
+        console.warn('[region] failed to send to backend:', e);
     }
 
     await fetchAndRenderTracks();

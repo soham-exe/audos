@@ -65,6 +65,7 @@ pub async fn download_yt_track(
     let yt_exe = get_yt_dlp_path();
 
     // Create the command
+    crate::yt_bridge::throttle_ytdlp().await;
     let mut cmd = tokio::process::Command::new(&yt_exe);
 
     // APPLY THE HIDE FLAG HERE

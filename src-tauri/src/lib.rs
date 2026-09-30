@@ -97,6 +97,7 @@ pub fn run() {
             download::download_yt_track,
             home_feed::fetch_home_feed,
             home_feed::total_categories,
+            home_feed::set_user_region,
             radio::fetch_related_tracks,
             yt_bridge::find_alternative,
             get_proxy_port,

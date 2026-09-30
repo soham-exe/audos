@@ -1,6 +1,33 @@
 use serde_json::Value;
 use std::sync::OnceLock;
 
+use std::sync::{Mutex};
+use std::time::{Duration, Instant};
+
+static LAST_SPAWN: OnceLock<Mutex<Instant>> = OnceLock::new();
+
+/// Global throttle: ensures no two yt-dlp processes start within 1.2s of each other.
+/// Call this right before every `Command::new(&yt_exe)`.
+pub async fn throttle_ytdlp() {
+    let lock = LAST_SPAWN.get_or_init(|| {
+        Mutex::new(Instant::now() - Duration::from_secs(10))
+    });
+
+    loop {
+        let wait_ms = {
+            let mut last = lock.lock().unwrap();
+            let elapsed = last.elapsed();
+            const MIN_GAP: Duration = Duration::from_millis(1200);
+            if elapsed >= MIN_GAP {
+                *last = Instant::now();
+                return;
+            }
+            (MIN_GAP - elapsed).as_millis() as u64
+        };
+        tokio::time::sleep(Duration::from_millis(wait_ms)).await;
+    }
+}
+
 #[cfg(windows)]
 #[allow(unused_imports)]
 use std::os::windows::process::CommandExt;
@@ -37,6 +64,7 @@ pub async fn find_alternative(
     // Quoted search forces YouTube to treat the whole phrase as one query
     let query = format!("ytsearch5:\"{}\" \"{}\"", title, artist);
 
+    throttle_ytdlp().await;
     let mut cmd = tokio::process::Command::new(&yt_exe);
     #[cfg(windows)]
     { cmd.creation_flags(0x08000000); }
@@ -100,6 +128,7 @@ pub async fn search_youtube(query: String) -> Result<Vec<YtTrack>, String> {
     let search_query = format!("ytsearch10:{}", query);
 
     // Create the command
+    throttle_ytdlp().await;
     let mut cmd = tokio::process::Command::new(&yt_exe);
 
     // APPLY THE HIDE FLAG HERE
@@ -147,6 +176,7 @@ pub async fn get_stream_url(yt_id: &str) -> Result<String, String> {
     let yt_exe = get_yt_dlp_path();
 
     for attempt in 1..=3 {
+        throttle_ytdlp().await;
         let mut cmd = tokio::process::Command::new(&yt_exe);
         #[cfg(windows)]
         { cmd.creation_flags(0x08000000); }

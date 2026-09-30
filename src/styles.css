@@ -1565,6 +1565,22 @@ body:has(#app.sidebar-collapsed):has(#app.queue-open) #player-bar {
   padding: 4px 16px 10px 16px;
   overflow: hidden; 
 }
+.region-input {
+  width: 100%;
+  padding: 6px;
+  background: var(--panel-strong);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  outline: none;
+  cursor: text;
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+.region-input:focus {
+  border-color: var(--line-ink);
+}
 .theme-select {
   width: 100%;
   padding: 6px;

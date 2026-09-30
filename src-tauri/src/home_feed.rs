@@ -18,13 +18,39 @@ pub struct CategoryFeed {
     pub tracks: Vec<YtTrack>,
 }
 
+use std::sync::RwLock;
+
+static USER_REGION: OnceLock<RwLock<String>> = OnceLock::new();
+
+fn user_region() -> String {
+    USER_REGION
+        .get_or_init(|| RwLock::new("Global".to_string()))
+        .read()
+        .unwrap()
+        .clone()
+}
+
+#[tauri::command]
+pub fn set_user_region(region: String) {
+    println!("[region] backend region set to: {}", region);
+    let lock = USER_REGION.get_or_init(|| RwLock::new("Global".to_string()));
+    *lock.write().unwrap() = region;
+
+    // Invalidate the category cache so the next fetch rebuilds it
+    // with the new region.
+    *category_cache().write().unwrap() = None;
+}
 
 /// All category definitions, ordered by priority.
 /// The frontend requests a slice by index range.
 
+/// Cached shuffled category order. Built lazily and rebuilt
+/// whenever the user's region changes.
+static CATEGORY_ORDER: OnceLock<RwLock<Option<Vec<(&'static str, String)>>>> = OnceLock::new();
 
-/// Cached shuffled category order. Computed once per app launch.
-static CATEGORY_ORDER: OnceLock<Vec<(&'static str, String)>> = OnceLock::new();
+fn category_cache() -> &'static RwLock<Option<Vec<(&'static str, String)>>> {
+    CATEGORY_ORDER.get_or_init(|| RwLock::new(None))
+}
 
 // ── Feed caches ──
 struct CachedTracks {
@@ -43,7 +69,7 @@ fn tracks_cache() -> &'static Mutex<HashMap<String, CachedTracks>> {
     TRACKS_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-const TRACKS_TTL_SECS: u64 = 30 * 60;         // 30 min
+const TRACKS_TTL_SECS: u64 = 2 * 60 * 60;         // 30 min
 
 fn now_secs() -> u64 {
     SystemTime::now()
@@ -52,11 +78,31 @@ fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
-fn all_categories(year: i32) -> &'static [(&'static str, String)] {
-    CATEGORY_ORDER.get_or_init(|| {
-        // Fixed first entry
+fn all_categories(year: i32) -> Vec<(&'static str, String)> {
+    // Fast path: return cached
+    {
+        let cache = category_cache().read().unwrap();
+        if let Some(v) = cache.as_ref() {
+            return v.clone();
+        }
+    }
+
+    // Slow path: build once, cache
+    {
+        let mut lock = category_cache().write().unwrap();
+        if let Some(v) = lock.as_ref() {
+            return v.clone();
+        }
+
+        let region = user_region();
+        let trending_query = if region == "Global" {
+            format!("top {} Global hits playlist", year)
+        } else {
+            format!("top {} hits {} playlist", year,region)
+        };
+
         let mut categories: Vec<(&'static str, String)> = vec![
-            ("Trending Now", format!("top hits {} playlist", year)),
+            ("Trending Now", trending_query),
         ];
 
         // Shuffled pool
@@ -65,45 +111,32 @@ fn all_categories(year: i32) -> &'static [(&'static str, String)] {
             ("Pop Hits",           format!("top pop hits {} playlist", year)),
             ("K-Pop",              format!("kpop hits {} playlist", year)),
             ("J-Pop",              format!("jpop hits {} playlist", year)),
-            ("Latin Pop",          format!("latin pop hits {} playlist", year)),
-            ("Alternative Pop",    format!("alternative pop hits {} playlist", year)),
 
             // ── Hip-Hop / Rap ──
             ("Hip Hop",            format!("hip hop hits {} playlist", year)),
             ("Trap",               format!("trap hits {} playlist", year)),
             ("Drill",              format!("drill rap {} playlist", year)),
             ("Underground Rap",    "underground rap playlist".to_string()),
-            ("Boom Bap",           "boom bap hip hop playlist".to_string()),
 
             // ── Rock / Metal ──
             ("Metal",              format!("metal hits {} playlist", year)),
             ("Classic Rock",       "classic rock hits playlist".to_string()),
-            ("Alternative Rock",   format!("alternative rock {} playlist", year)),
-            ("Progressive Rock",   "progressive rock playlist".to_string()),
             ("Metalcore",          format!("metalcore {} playlist", year)),
             ("Post Rock",          "post rock instrumental playlist".to_string()),
 
             // ── Electronic ──
             ("EDM",                format!("edm hits {} playlist", year)),
-            ("House",              format!("house music playlist {}", year)),
-            ("Deep House",         "deep house playlist".to_string()),
             ("Techno",             "techno playlist".to_string()),
             ("Trance",             "trance playlist".to_string()),
-            ("Drum & Bass",        "drum and bass playlist".to_string()),
-            ("Dubstep",            format!("dubstep {} playlist", year)),
             ("Future Bass",        "future bass playlist".to_string()),
-            ("Chillstep",          "chillstep playlist".to_string()),
 
             // ── Soul / R&B / Groove ──
             ("R&B",                format!("r&b hits {} playlist", year)),
-            ("Neo Soul",           "neo soul playlist".to_string()),
             ("Soul",               "soul music playlist".to_string()),
             ("Funk",               "funk music playlist".to_string()),
             ("Blues",              "blues music playlist".to_string()),
 
             // ── Reggae / World ──
-            ("Reggae",             "reggae hits playlist".to_string()),
-            ("Flamenco",           "flamenco music playlist".to_string()),
             ("City Pop",           "city pop playlist".to_string()),
 
             // ── Jazz / Lo-Fi / Chill ──
@@ -115,8 +148,6 @@ fn all_categories(year: i32) -> &'static [(&'static str, String)] {
             // ── Study / Focus / Sleep ──
             ("Study Music",        "study music playlist".to_string()),
             ("Coffeehouse",        "coffeehouse jazz playlist".to_string()),
-            ("Piano",              "relaxing piano playlist".to_string()),
-            ("Acoustic",           "acoustic hits playlist".to_string()),
             ("Sleep Music",        "sleep music playlist".to_string()),
 
             // ── Indian / Regional ──
@@ -124,25 +155,19 @@ fn all_categories(year: i32) -> &'static [(&'static str, String)] {
             ("Punjabi",            format!("punjabi hits {} playlist", year)),
             ("Tamil Hits",         format!("tamil hits {} playlist", year)),
             ("Telugu Hits",        format!("telugu hits {} playlist", year)),
-            ("Arabic",             format!("arabic hits {} playlist", year)),
-
             // ── Classical / Instrumental ──
-            ("Classical",          "classical music playlist".to_string()),
-            ("Violin",             "violin instrumental playlist".to_string()),
-            ("Guitar",             "guitar instrumental playlist".to_string()),
-            ("Orchestral",         "epic orchestral playlist".to_string()),
+            ("Classical",          "indian classical music playlist".to_string()),
+            ("Orchestral",         "orchestral playlist".to_string()),
 
             // ── Anime / Game ──
             ("Anime Openings",     format!("anime openings {} playlist", year)),
             ("Anime OST",          "anime soundtrack playlist".to_string()),
-            ("Video Game OST",     "video game soundtrack playlist".to_string()),
-            ("JRPG Music",         "jrpg music playlist".to_string()),
+            ("Video Game OST",     "video game music playlist".to_string()),
 
             // ── Retro / Discovery ──
-            ("Live Sessions",      "npr tiny desk concert playlist".to_string()),
             ("Classics",           "80s 90s classic hits playlist".to_string()),
             ("Hidden Gems",        "underrated songs playlist".to_string()),
-            ("Viral Songs",        format!("viral hits {} playlist", year)),
+            ("Viral Songs",        format!("viral ticktok songs {} playlist", year)),
         ];
 
         // Shuffle once at init
@@ -162,8 +187,9 @@ fn all_categories(year: i32) -> &'static [(&'static str, String)] {
         }
 
         categories.extend(pool);
+        *lock = Some(categories.clone());
         categories
-    })
+    }
 }
 
 
@@ -187,19 +213,12 @@ pub async fn fetch_home_feed(start: usize, end: usize) -> Result<Vec<CategoryFee
 
     println!("[home_feed] fetching batch {}..{} ({} categories)", start, end, batch.len());
 
-    let mut handles = Vec::new();
-    for (name, query) in batch {
-        handles.push(tokio::spawn(async move {
-            let tracks = fetch_category(&query).await.unwrap_or_default();
-            CategoryFeed { category: name, tracks }
-        }));
-    }
-
     let mut feeds = Vec::new();
-    for h in handles {
-        if let Ok(feed) = h.await {
-            feeds.push(feed);
-        }
+    for (name, query) in batch {
+        let tracks = fetch_category(&query).await.unwrap_or_default();
+        feeds.push(CategoryFeed { category: name, tracks });
+        // Stagger between categories so we don't burst YouTube
+        tokio::time::sleep(tokio::time::Duration::from_millis(900)).await;
     }
 
     Ok(feeds)
@@ -218,6 +237,7 @@ async fn fetch_from_search(query: &str) -> Result<Vec<YtTrack>, String> {
     );
 
     let yt_exe = get_yt_dlp_path();
+    crate::yt_bridge::throttle_ytdlp().await;
     let mut cmd = Command::new(&yt_exe);
 
     #[cfg(windows)]
@@ -396,6 +416,7 @@ async fn fetch_playlist_contents(query: &str) -> Result<Vec<YtTrack>, String> {
 
     // ── Fetch playlist contents ──
     let yt_exe = get_yt_dlp_path();
+    crate::yt_bridge::throttle_ytdlp().await;
     let mut cmd = Command::new(&yt_exe);
 
     #[cfg(windows)]
@@ -489,6 +510,7 @@ async fn resolve_playlist_url(query: &str) -> Result<String, String> {
     );
 
     let yt_exe = get_yt_dlp_path();
+    crate::yt_bridge::throttle_ytdlp().await;
     let mut cmd = Command::new(&yt_exe);
 
     #[cfg(windows)]

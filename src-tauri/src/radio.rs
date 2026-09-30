@@ -21,6 +21,7 @@ pub async fn fetch_related_tracks(yt_id: String) -> Result<Vec<YtTrack>, String>
     println!("[radio] fetching related for: {}", yt_id);
 
     let yt_exe = get_yt_dlp_path();
+    crate::yt_bridge::throttle_ytdlp().await;
     let mut cmd = Command::new(&yt_exe);
 
     #[cfg(windows)]
