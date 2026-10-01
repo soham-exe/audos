@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "audos"
 version = "0.1.4"
 description = "Custom music player"
