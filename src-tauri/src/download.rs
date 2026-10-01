@@ -18,6 +18,27 @@ fn sanitize_filename(name: &str) -> String {
         .to_string()
 }
 
+/// Turn raw yt-dlp stderr into a short, human-readable message.
+fn classify_ytdlp_error(stderr: &str) -> String {
+    let s = stderr.to_lowercase();
+
+    if s.contains("403") || s.contains("forbidden") {
+        "YouTube blocked this download. It may be region-locked or age-restricted.".into()
+    } else if s.contains("429") || s.contains("too many requests") {
+        "Too many requests. Please wait a minute and try again.".into()
+    } else if s.contains("sign in to confirm") || s.contains("cookies") {
+        "YouTube is asking for verification. Try again later.".into()
+    } else if s.contains("video unavailable") || s.contains("private video") {
+        "This video is unavailable or private.".into()
+    } else if s.contains("connection") || s.contains("timed out") || s.contains("network") {
+        "Network error. Check your connection.".into()
+    } else if s.contains("copyright") {
+        "This video was removed due to a copyright claim.".into()
+    } else {
+        "Download failed. Please try again.".into()
+    }
+}
+
 #[tauri::command]
 pub async fn download_yt_track(
     yt_id: String,
@@ -85,22 +106,29 @@ pub async fn download_yt_track(
         .map_err(|e| e.to_string())?;
 
     if !output.status.success() {
-        return Err(format!(
-            "Download failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("[download] yt-dlp failed: {}", stderr);
+        return Err(classify_ytdlp_error(&stderr));
     }
 
     let file_path_str = file_path.to_string_lossy().to_string();
 
     let conn = state.conn.lock().unwrap();
 
-    // Delete the streaming entry, then insert the downloaded one
-    let _ = conn.execute("DELETE FROM Tracks WHERE file_path_or_url = ?1", [&yt_id]);
+    // Delete any prior streaming row for this yt_id (it's now superseded by
+    // the downloaded file). Also delete any prior downloaded row for the
+    // same yt_id if the file path changed (e.g. user deleted + re-downloaded).
     let _ = conn.execute(
-        "INSERT OR REPLACE INTO Tracks (source_type, file_path_or_url, title, artist_name, thumbnail, duration)
-        VALUES ('downloaded_native', ?1, ?2, ?3, ?4, ?5)",
-        (&file_path_str, &title, &artist, &thumbnail, &duration),
+        "DELETE FROM Tracks WHERE yt_id = ?1",
+        [&yt_id],
+    );
+
+    // Insert the downloaded row, keeping yt_id for identity matching
+    let _ = conn.execute(
+        "INSERT OR REPLACE INTO Tracks
+            (source_type, file_path_or_url, title, artist_name, thumbnail, duration, yt_id)
+         VALUES ('downloaded_native', ?1, ?2, ?3, ?4, ?5, ?6)",
+        (&file_path_str, &title, &artist, &thumbnail, &duration, &yt_id),
     );
 
     Ok(file_path_str)

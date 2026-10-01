@@ -25,7 +25,7 @@
       playsinline
       preload="auto"
     ></video>
-    <div id="app">
+      <div id="app">
       <div id="splash">
         <div class="splash-content">
             <img src="/icons/logo.svg" alt="" class="splash-logo" />
@@ -37,16 +37,21 @@
       <header id="top-bar">
         <div class="top-left">
           <img src="/icons/logo.svg" alt="Logo" class="brand-mark" />
+          <div id="toast-container" class="toast-container"></div>
         </div>
 
-        <div class="top-center">
+                <div class="top-center">
           <button class="nav-btn home-btn" title="Home">
             <img src="/icons/home.svg" alt="Home" />
           </button>
           <div class="search-bar">
             <img src="/icons/search.svg" class="search-icon" alt="" />
-            <input type="text" placeholder="Search your local files..." />
+            <input type="text" placeholder="Search for anything..." />
             <img src="/icons/clear.svg" class="clear-icon" alt="" />
+          </div>
+          <div id="offline-banner" class="offline-banner">
+            <span class="offline-dot"></span>
+            You're offline
           </div>
         </div>
         

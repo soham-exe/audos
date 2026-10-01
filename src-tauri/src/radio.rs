@@ -33,7 +33,7 @@ pub async fn fetch_related_tracks(yt_id: String) -> Result<Vec<YtTrack>, String>
         .arg("--dump-json")
         .arg("--flat-playlist")
         .arg("--playlist-end")
-        .arg("30")
+        .arg("5")
         .arg("--no-warnings")
         .arg(&mix_url)
         .output()

@@ -25,7 +25,8 @@ pub fn init_db(app_dir: &std::path::Path) -> Result<Connection> {
             artist_name       TEXT,
             album_name        TEXT,
             duration          INTEGER,
-            thumbnail         TEXT
+            thumbnail         TEXT,
+            yt_id             TEXT
         )",
         [],
     )?;
@@ -39,7 +40,21 @@ pub fn init_db(app_dir: &std::path::Path) -> Result<Connection> {
         "CREATE INDEX IF NOT EXISTS idx_tracks_source ON Tracks(source_type)",
         [],
     )?;
+    // Migration: add yt_id column if it doesn't exist (older installs)
+    let has_yt_id: bool = conn
+        .prepare("PRAGMA table_info(Tracks)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .filter_map(|r| r.ok())
+        .any(|name| name == "yt_id");
+    if !has_yt_id {
+        let _ = conn.execute("ALTER TABLE Tracks ADD COLUMN yt_id TEXT", []);
+    }
 
+    // Index for fast "is this yt_id already downloaded?" checks
+    let _ = conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tracks_yt_id ON Tracks(yt_id)",
+        [],
+    );
     Ok(conn)
 }
 
@@ -53,6 +68,7 @@ pub struct Track {
     pub album_name: Option<String>,
     pub duration: Option<i64>,
     pub thumbnail: Option<String>,
+    pub yt_id: Option<String>,
 }
 
 #[tauri::command]
@@ -60,7 +76,7 @@ pub fn get_tracks(state: State<'_, DbState>) -> Result<Vec<Track>, String> {
     let conn = state.conn.lock().unwrap();
     let mut stmt = conn
         .prepare(
-            "SELECT id, source_type, file_path_or_url, title, artist_name, album_name, duration, thumbnail
+            "SELECT id, source_type, file_path_or_url, title, artist_name, album_name, duration, thumbnail, yt_id
              FROM Tracks
              ORDER BY title COLLATE NOCASE ASC",
         )
@@ -77,6 +93,7 @@ pub fn get_tracks(state: State<'_, DbState>) -> Result<Vec<Track>, String> {
                 album_name: row.get(5)?,
                 duration: row.get(6)?,
                 thumbnail: row.get(7)?,
+                yt_id: row.get(8)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -88,6 +105,7 @@ pub fn get_tracks(state: State<'_, DbState>) -> Result<Vec<Track>, String> {
     Ok(tracks)
 }
 
+
 pub fn insert_track(
     conn: &Connection,
     source_type: &str,
@@ -97,18 +115,20 @@ pub fn insert_track(
     album_name: Option<&str>,
     duration: Option<i64>,
     thumbnail: Option<&str>,
+    yt_id: Option<&str>,
 ) -> Result<(), rusqlite::Error> {
     conn.execute(
         "INSERT INTO Tracks
-            (source_type, file_path_or_url, title, artist_name, album_name, duration, thumbnail)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            (source_type, file_path_or_url, title, artist_name, album_name, duration, thumbnail, yt_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          ON CONFLICT(file_path_or_url) DO UPDATE SET
             title = excluded.title,
             artist_name = excluded.artist_name,
             album_name = excluded.album_name,
             duration = excluded.duration,
-            thumbnail = excluded.thumbnail",
-        (source_type, file_path, title, artist_name, album_name, duration, thumbnail),
+            thumbnail = excluded.thumbnail,
+            yt_id = excluded.yt_id",
+        (source_type, file_path, title, artist_name, album_name, duration, thumbnail, yt_id),
     )?;
     Ok(())
 }
@@ -123,6 +143,7 @@ pub fn insert_track_cmd(
     album_name: Option<String>,
     duration: Option<i64>,
     thumbnail: Option<String>,
+    yt_id: Option<String>,
 ) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     insert_track(
@@ -134,6 +155,7 @@ pub fn insert_track_cmd(
         album_name.as_deref(),
         duration,
         thumbnail.as_deref(),
+        yt_id.as_deref(),
     )
     .map_err(|e| e.to_string())
 }
@@ -172,4 +194,22 @@ pub fn cleanup_deleted_files(conn: &Connection) -> Result<usize, rusqlite::Error
 pub fn cleanup_deleted_files_cmd(state: State<'_, DbState>) -> Result<usize, String> {
     let conn = state.conn.lock().unwrap();
     cleanup_deleted_files(&conn).map_err(|e| e.to_string())
+}
+
+/// Returns the local file path for a downloaded track given its yt_id,
+/// or None if it hasn't been downloaded.
+#[tauri::command]
+pub fn get_downloaded_path(
+    state: State<'_, DbState>,
+    yt_id: String,
+) -> Option<String> {
+    let conn = state.conn.lock().unwrap();
+    let mut stmt = conn
+        .prepare(
+            "SELECT file_path_or_url FROM Tracks
+             WHERE yt_id = ?1 AND source_type = 'downloaded_native'
+             LIMIT 1",
+        )
+        .ok()?;
+    stmt.query_row([&yt_id], |r| r.get::<_, String>(0)).ok()
 }

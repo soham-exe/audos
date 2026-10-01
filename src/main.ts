@@ -191,10 +191,59 @@ loadTheme(savedTheme);
 // ==========================================
 // Auto-update system
 // ==========================================
+// ── Update splash UI helpers ────────────────────────────────
+function showUpdateSplash(version: string) {
+    document.getElementById('update-splash')?.remove();
+
+    const splash = document.createElement('div');
+    splash.id = 'update-splash';
+    splash.className = 'update-splash';
+    splash.innerHTML = `
+        <div class="update-splash-content">
+            <img src="/icons/logo.svg" alt="" class="update-splash-logo" />
+            <h1 class="update-splash-title">Updating Audos</h1>
+            <p class="update-splash-version">Version ${version}</p>
+            <div class="update-splash-bar-bg">
+                <div class="update-splash-bar-fill is-indeterminate" id="update-bar-fill"></div>
+            </div>
+            <p class="update-splash-status" id="update-status">Preparing…</p>
+            <p class="update-splash-hint">Please don't close the app</p>
+        </div>
+    `;
+    document.body.appendChild(splash);
+}
+
+function updateSplashStatus(text: string, pct: number | null) {
+    const status = document.getElementById('update-status');
+    const bar = document.getElementById('update-bar-fill') as HTMLElement | null;
+    if (status) status.textContent = text;
+
+    if (bar) {
+        if (pct === null) {
+            // Indeterminate — animated sliding bar
+            bar.classList.add('is-indeterminate');
+            bar.style.width = '';
+        } else {
+            // Determinate — real progress
+            bar.classList.remove('is-indeterminate');
+            bar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+        }
+    }
+}
+
+function hideUpdateSplash() {
+    const el = document.getElementById('update-splash');
+    if (!el) return;
+    el.style.transition = 'opacity 200ms ease';
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 220);
+}
+
+// ── Update flow ─────────────────────────────────────────────
 async function checkForUpdates() {
     try {
         const update = await check();
-        if (!update) return;   // no update available — silent
+        if (!update) return;   // no update — silent
 
         const shouldUpdate = await tauriConfirm(
             `Version ${update.version} is available.\n\nCurrent version: ${update.currentVersion}\n\nUpdate now?`,
@@ -202,25 +251,46 @@ async function checkForUpdates() {
         );
         if (!shouldUpdate) return;
 
+        // ── Show splash immediately ──
+        showUpdateSplash(update.version);
+
+        let downloaded = 0;
+        let total = 0;
+
         await update.downloadAndInstall((event) => {
             if (event.event === 'Started') {
-                console.log(`[update] downloading ${event.data.contentLength} bytes`);
+                total = event.data.contentLength ?? 0;
+                console.log(`[update] downloading ${total} bytes`);
+                updateSplashStatus(
+                    total > 0 ? 'Starting download…' : 'Downloading…',
+                    total > 0 ? 0 : null
+                );
             } else if (event.event === 'Progress') {
-                console.log(`[update] +${event.data.chunkLength} bytes`);
+                downloaded += event.data.chunkLength;
+                if (total > 0) {
+                    const pct = (downloaded / total) * 100;
+                    updateSplashStatus(`Downloading… ${Math.round(pct)}%`, pct);
+                } else {
+                    updateSplashStatus('Downloading…', null);
+                }
+                console.log(`[update] +${event.data.chunkLength} bytes (${downloaded}/${total})`);
             } else if (event.event === 'Finished') {
                 console.log('[update] download complete');
+                updateSplashStatus('Installing…', 100);
             }
         });
 
-        await tauriMessage('Update installed. Audos will restart.', {
-            title: 'Update Complete',
-            kind: 'info',
-        });
+        updateSplashStatus('Restarting…', 100);
+
+        // Give the user a beat to read the final state
+        await new Promise(r => setTimeout(r, 900));
+
         await relaunch();
     } catch (e) {
-        // Silent fail — don't bug the user about update errors
-        // (offline, network issues, DNS, etc.)
         console.warn('[update] check failed:', e);
+        // If we got as far as showing the splash, remove it so the
+        // user isn't stuck on a dead screen.
+        hideUpdateSplash();
     }
 }
 
@@ -250,6 +320,7 @@ interface Track {
     artist_name?: string;
     album_name?: string;
     thumbnail?: string;
+    yt_id?: string | null;  // original YouTube ID (survives download)
 }
 
 interface YtTrack {
@@ -264,6 +335,213 @@ interface Playlist {
     name: string;
     folderPath: string;
     tracks?: string[];
+}
+
+// ==========================================
+// Offline detection
+// ==========================================
+let isOnline = navigator.onLine;
+
+/// navigator.onLine is unreliable — it says "true" when you're on
+/// a Wi-Fi network with no internet. This actually pings a remote
+/// host to verify real connectivity.
+async function checkRealConnectivity(): Promise<boolean> {
+    if (!navigator.onLine) return false;   // already known-offline, skip the ping
+
+    try {
+        await fetch('https://www.youtube.com/favicon.ico', {
+            method: 'HEAD',
+            cache: 'no-store',
+            mode: 'no-cors',                    // avoid CORS preflight
+            signal: AbortSignal.timeout(4000),
+        });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/// Fast probe used inside the error handler. Shorter timeout so we don't
+/// stall the UI while deciding whether to skip the track.
+async function quickConnectivityCheck(): Promise<boolean> {
+    if (!navigator.onLine) return false;
+    try {
+        await fetch('https://www.youtube.com/favicon.ico', {
+            method: 'HEAD',
+            cache: 'no-store',
+            mode: 'no-cors',
+            signal: AbortSignal.timeout(2500),
+        });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function applyOnlineState(online: boolean) {
+    const changed = online !== isOnline;
+    isOnline = online;
+
+    document.body.classList.toggle('is-offline', !online);
+
+    // If we're not playing a streaming track, none of the resume /
+    // offline-pause machinery applies. Local files don't care about
+    // the network. Still toggle the body class + home-feed placeholder
+    // (those are UI concerns), but skip the playback logic.
+    if (!isCurrentTrackStreaming()) {
+        if (changed && !online) {
+            // Optionally still show the banner + home placeholder
+            const feedsContainer = document.getElementById('home-feeds');
+            if (feedsContainer && !feedsContainer.querySelector('.offline-placeholder')) {
+                feedsContainer.innerHTML = `
+                    <div class="offline-placeholder">
+                        <img src="/icons/cloud.svg" class="offline-icon" />
+                        <p>You're offline</p>
+                        <span>Downloaded songs are still available in your library.</span>
+                    </div>
+                `;
+            }
+        }
+        // Local playback continues, unaffected.
+        return;
+    }
+
+    if (changed) {
+        console.log(`[net] ${online ? 'online' : 'offline'}`);
+        if (online) {
+            // ── Resume any paused-for-offline playback ──
+            if (pausedForOffline && currentIndex >= 0 && queue[currentIndex]) {
+                const track = queue[currentIndex];
+                console.log(`[net] resuming "${track.title}" at ${resumePosition}s`);
+
+                // Rebuild the source URL (the old one is dead after the error)
+                if (track.source_type === 'youtube_stream' && proxyPort) {
+                    audio.src = `http://127.0.0.1:${proxyPort}/stream?yt_id=${track.file_path_or_url}`;
+                } else if (track.source_type !== 'youtube_stream') {
+                    // Local file — just reload it
+                    audio.src = convertFileSrc(track.file_path_or_url);
+                }
+
+                // Restore position once metadata is loaded, then play
+                const onLoaded = () => {
+                    audio.removeEventListener('loadedmetadata', onLoaded);
+                    try { audio.currentTime = resumePosition; } catch {}
+                    audio.play().catch(e => console.warn('[net] resume play failed:', e));
+                    isPlaying = true;
+                    consecutiveStreamErrors = 0;   // fresh start on resume
+                    const playIcon = document.getElementById('play-icon') as HTMLImageElement;
+                    if (playIcon) playIcon.src = '/icons/pause.svg';
+                    showToast('Resumed', 'success', 2000);
+                };
+                audio.addEventListener('loadedmetadata', onLoaded, { once: true });
+
+                // If the reload errors again, the error handler will fire
+                // and handle it as a fresh offline event.
+                pausedForOffline = false;
+                resumePosition = 0;
+            }
+
+            // Refetch home feed if it was showing an offline placeholder
+            if (!isShowingPlaylist && searchInput && searchInput.value.trim() === '') {
+                const feedsContainer = document.getElementById('home-feeds');
+                const isEmpty = !feedsContainer
+                    || feedsContainer.querySelector('.offline-placeholder')
+                    || feedsContainer.children.length === 0;
+                if (isEmpty) renderHomeView();
+            }
+        } else {
+            // Went offline — capture the current position BEFORE the buffer
+            // drains, so we can resume precisely when we come back.
+            if (currentIndex >= 0 && isPlaying && audio.currentTime > 0) {
+                resumePosition = audio.currentTime;
+                pausedForOffline = true;
+                currentTrackInterrupted = true;
+                console.log(`[net] offline — will resume "${queue[currentIndex]?.title}" at ${resumePosition}s`);
+            }
+
+            // Swap home feed for a placeholder
+            const feedsContainer = document.getElementById('home-feeds');
+            if (feedsContainer && !feedsContainer.querySelector('.offline-placeholder')) {
+                feedsContainer.innerHTML = `
+                    <div class="offline-placeholder">
+                        <img src="/icons/cloud.svg" class="offline-icon" />
+                        <p>You're offline</p>
+                        <span>Downloaded songs are still available in your library.</span>
+                    </div>
+                `;
+            }
+        }
+    }
+}
+
+window.addEventListener('online', () => {
+    // Verify with a real ping before trusting the event
+    checkRealConnectivity().then(applyOnlineState);
+});
+
+window.addEventListener('offline', () => {
+    applyOnlineState(false);
+});
+
+// Periodic check — every 30s, verify we're really online
+// (handles Wi-Fi with no internet, captive portals, etc.)
+setInterval(async () => {
+    const real = await checkRealConnectivity();
+    applyOnlineState(real);
+}, 30_000);
+
+// Initial check on boot — navigator.onLine lies on startup sometimes
+checkRealConnectivity().then(applyOnlineState);
+
+
+// ==========================================
+// Toast notifications
+// ==========================================
+type ToastKind = 'info' | 'success' | 'error';
+
+function getToastContainer(): HTMLElement {
+    // Container lives inside the topbar (see index.html). If for some
+    // reason it's missing, fall back to appending to body so toasts
+    // never silently fail.
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+    return container;
+}
+
+function showToast(
+    message: string,
+    kind: ToastKind = 'info',
+    duration = 4000
+): void {
+    const container = getToastContainer();
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast--${kind}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    // Trigger enter transition on next frame
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => toast.classList.add('toast--visible'));
+    });
+
+    const dismiss = () => {
+        toast.classList.remove('toast--visible');
+        setTimeout(() => toast.remove(), 300);
+    };
+
+    const timer = setTimeout(dismiss, duration);
+
+    // Click to dismiss early
+    toast.addEventListener('click', () => {
+        clearTimeout(timer);
+        dismiss();
+    });
 }
 
 
@@ -293,8 +571,27 @@ let currentIndex = -1;
 let shuffleMode: 0 | 1 = 0;
 let repeatMode: 0 | 1 | 2 = 0;
 let isPlaying = false;
-let proxyPort: number | null = null;
-let downloadMode = localStorage.getItem('download_mode') || 'stream';
+let proxyPort: number | null = null;    
+let downloadMode = localStorage.getItem('download_mode') || 'manual';
+// Index of the track actually loaded in the <audio> element. Kept in
+// sync with playback, NOT with UI selection. When the offline guard
+// blocks a track, `currentIndex` moves but `audioLoadedIndex` doesn't.
+let audioLoadedIndex = -1;
+
+// Remember playback position so we can resume after a network blip
+let pausedForOffline = false;
+let resumePosition = 0;
+
+// Tracks rapid stream failures to prevent skip-cascades when the network
+// dies but the OS hasn't told us yet.
+let consecutiveStreamErrors = 0;
+let lastStreamErrorAt = 0;
+const STREAM_ERROR_WINDOW_MS = 8000;   // errors within 8s count as "consecutive"
+const STREAM_ERROR_THRESHOLD = 1;      // 1 strike → treat as network outage
+
+// Set true when the current track's playback was interrupted (network,
+// error, offline). `ended` should NOT auto-advance in that case.
+let currentTrackInterrupted = false;
 
 // Global rate-limit flag — set when we detect a 429 from the proxy.
 // Prevents background prefetch / aggressive fetches until things cool down.
@@ -304,6 +601,13 @@ declare global {
     }
 }
 window.__audosRateLimited = false;
+
+/// True if the currently playing queue entry is a streaming (network) track.
+/// Used to gate network-event handling so local files aren't affected.
+function isCurrentTrackStreaming(): boolean {
+    if (currentIndex < 0 || currentIndex >= queue.length) return false;
+    return queue[currentIndex]?.source_type === 'youtube_stream';
+}
 
 // ==========================================
 // Sidebar Collapse
@@ -822,6 +1126,7 @@ function renderHomeView() {
             feed.tracks.forEach((t, i) => {
                 const card = document.createElement('div');
                 card.className = 'album-card';
+                card.setAttribute('data-source', 'youtube_stream');
                 card.innerHTML = `
                     <div class="album-art" style="background-image: url('${t.thumbnail}');"></div>
                     <div class="album-title">${t.title}</div>
@@ -1084,26 +1389,105 @@ async function fetchAndRenderTracks() {
 // ==========================================
 // Download
 // ==========================================
+/// After a successful download, replace every occurrence of this yt_id
+/// across liked/playlists/queue/history with the downloaded version.
+/// Uses yt_id as the identity key so duplicate rows can't survive.
+function migrateTrackEverywhere(ytId: string, localPath: string) {
+    // ── Liked Songs ──
+    try {
+        const liked: Track[] = JSON.parse(localStorage.getItem('liked_tracks_full') || '[]');
+        let changed = false;
+        for (const t of liked) {
+            if (t.source_type === 'youtube_stream' && t.file_path_or_url === ytId) {
+                t.source_type = 'downloaded_native';
+                t.file_path_or_url = localPath;
+                changed = true;
+            }
+        }
+        if (changed) {
+            localStorage.setItem('liked_tracks_full', JSON.stringify(liked));
+        }
+    } catch (e) { console.error('[migrate] liked failed:', e); }
+
+    // ── Playlists (user-saved track IDs) ──
+    let playlistsChanged = false;
+    for (const pl of playlists) {
+        if (pl.tracks) {
+            for (let i = 0; i < pl.tracks.length; i++) {
+                if (pl.tracks[i] === ytId) {
+                    pl.tracks[i] = localPath;
+                    playlistsChanged = true;
+                }
+            }
+        }
+    }
+    if (playlistsChanged) savePlaylists();
+
+    // ── History ──
+    try {
+        const raw = localStorage.getItem('play_history_full');
+        if (raw) {
+            const data = JSON.parse(raw);
+            let histChanged = false;
+            for (const t of (data.tracks || [])) {
+                if (t.source_type === 'youtube_stream' && t.file_path_or_url === ytId) {
+                    t.source_type = 'downloaded_native';
+                    t.file_path_or_url = localPath;
+                    histChanged = true;
+                }
+            }
+            if (histChanged) localStorage.setItem('play_history_full', JSON.stringify(data));
+        }
+    } catch (e) { console.error('[migrate] history failed:', e); }
+
+    // ── Queue + originalQueue + currently playing ──
+    let queueChanged = false;
+    for (const t of queue) {
+        if (t.source_type === 'youtube_stream' && t.file_path_or_url === ytId) {
+            t.source_type = 'downloaded_native';
+            t.file_path_or_url = localPath;
+            queueChanged = true;
+        }
+    }
+    for (const t of originalQueue) {
+        if (t.source_type === 'youtube_stream' && t.file_path_or_url === ytId) {
+            t.source_type = 'downloaded_native';
+            t.file_path_or_url = localPath;
+        }
+    }
+    if (queueChanged) refreshQueuePanel();
+}
+
 async function triggerDownload(track: Track, btnEl?: HTMLElement) {
     if (btnEl) {
         btnEl.className = 'track-row-dl-btn track-row-dl-btn--loading';
         btnEl.innerHTML = '<img src="/icons/spinner.svg" />';
     }
+
+    // Remember the original yt_id before we mutate the track object
+    const ytId = track.file_path_or_url;
+
     try {
         const localPath: string = await invoke('download_yt_track', {
-            ytId: track.file_path_or_url,
+            ytId,
             title: track.title,
             artist: track.artist_name || track.title,
             thumbnail: track.thumbnail || "",
             duration: track.duration
         });
 
+        // Migrate every reference to this yt_id across the app
+        migrateTrackEverywhere(ytId, localPath);
+
+        // Update the object the caller passed us too
         track.source_type = 'downloaded_native';
         track.file_path_or_url = localPath;
 
         if (btnEl) {
             btnEl.className = 'track-row-dl-btn track-row-dl-btn--success';
             btnEl.innerHTML = '<img src="/icons/downloaded.svg" />';
+            // Fade the whole row's download button out after the swap
+            setTimeout(() => { btnEl.style.opacity = '0'; }, 800);
         }
 
         if (!playlists.some(p => p.folderPath === 'VIRTUAL_DOWNLOADS')) {
@@ -1115,13 +1499,14 @@ async function triggerDownload(track: Track, btnEl?: HTMLElement) {
         }
 
         await fetchAndRenderTracks();
+        showToast('Downloaded!', 'success', 2500);
     } catch (e) {
         console.error("Download failed", e);
         if (btnEl) {
             btnEl.className = 'track-row-dl-btn track-row-dl-btn--error';
             btnEl.innerHTML = '<img src="/icons/error.svg" />';
         }
-        await tauriMessage(`Download failed: ${e}`, { title: 'Download Error', kind: 'error' });
+        showToast(String(e), 'error', 6000);
     }
 }
 
@@ -1208,6 +1593,7 @@ function renderTracks(tracks: Track[], titleOverride?: string) {
     const item = document.createElement('div');
     item.className = 'track-row';
     item.style.top = `${index * ITEM_HEIGHT}px`;
+    item.setAttribute('data-source', track.source_type);
 
     // ── Index number (001, 002, 003 — visible only when theme sets
     //    --track-index-width > 0) ──
@@ -1254,11 +1640,24 @@ function renderTracks(tracks: Track[], titleOverride?: string) {
     item.appendChild(info);
 
     if (track.source_type === 'youtube_stream' && downloadMode === 'manual') {
-        const dlBtn = document.createElement('button');
-        dlBtn.className = 'track-row-dl-btn';
-        dlBtn.innerHTML = '<img src="/icons/download.svg" />';
-        dlBtn.onclick = (e) => { e.stopPropagation(); triggerDownload(track, dlBtn); };
-        item.appendChild(dlBtn);
+        const ytId = track.file_path_or_url;
+        const alreadyDownloaded = currentTracks.some(
+            t => t.source_type === 'downloaded_native' && t.yt_id === ytId
+        );
+
+        if (alreadyDownloaded) {
+            const badge = document.createElement('span');
+            badge.className = 'track-row-dl-badge';
+            badge.title = 'Already downloaded';
+            badge.innerHTML = '<img src="/icons/downloaded.svg" />';
+            item.appendChild(badge);
+        } else {
+            const dlBtn = document.createElement('button');
+            dlBtn.className = 'track-row-dl-btn';
+            dlBtn.innerHTML = '<img src="/icons/download.svg" />';
+            dlBtn.onclick = (e) => { e.stopPropagation(); triggerDownload(track, dlBtn); };
+            item.appendChild(dlBtn);
+        }
     }
 
     item.onclick = () => {
@@ -1497,7 +1896,52 @@ async function playTrack(index: number) {
     currentIndex = index;
     const track = queue[index];
 
+    // Block streaming tracks when offline — but still update the UI so
+    // the player bar reflects the new track selection.
+    if (track.source_type === 'youtube_stream' && !isOnline) {
+        // Update the now-playing UI to reflect the selected track
+        titleEl.textContent = track.title || 'Unknown Title';
+        artistEl.textContent = track.artist_name || 'Unknown Artist';
+        if (track.thumbnail) {
+            albumArtEl.style.backgroundImage = `url('${track.thumbnail}')`;
+            albumArtEl.style.backgroundSize = 'cover';
+            albumArtEl.style.backgroundPosition = 'center';
+        } else {
+            albumArtEl.style.backgroundImage = 'none';
+            albumArtEl.style.backgroundColor = 'var(--panel-strong)';
+        }
+        updateLikeButton(track);
+
+        // Make sure we're paused and the icon reflects that.
+        // Also clear the loading shimmer so the album art isn't stuck.
+        audio.pause();
+        albumArtEl.classList.remove('loading', 'ready');
+        isPlaying = false;
+        const playIcon = document.getElementById('play-icon') as HTMLImageElement;
+        if (playIcon) playIcon.src = '/icons/play.svg';
+
+        // Remember position so if they come back online we resume the
+        // RIGHT track (the one currently in queue[currentIndex]).
+        resumePosition = 0;
+        pausedForOffline = true;
+
+        showToast('You\'re offline — this track can\'t be streamed', 'error', 4000);
+        refreshQueuePanel();
+        return;
+    }
+
     addToHistory(track);
+
+    // Fresh track → clear the interruption flag
+    currentTrackInterrupted = false;
+
+    // Local tracks have no network dependency. Wipe all streaming state
+    // so a later "online"/"offline" event can't touch this playback.
+    if (track.source_type !== 'youtube_stream') {
+        pausedForOffline = false;
+        resumePosition = 0;
+        consecutiveStreamErrors = 0;
+    }
 
     albumArtEl.classList.remove('loading', 'ready');
     albumArtEl.classList.add('loading');
@@ -1523,18 +1967,84 @@ async function playTrack(index: number) {
         audio.src = convertFileSrc(track.file_path_or_url);
     }
 
-    audio.addEventListener('canplay', clearThumbLoading, { once: true });
+    // The audio element now holds this track
+    audioLoadedIndex = index;
+
+    const onCanPlay = () => {
+        clearThumbLoading();
+        // Playback is healthy — reset the failure counter
+        consecutiveStreamErrors = 0;
+    };
+    audio.addEventListener('canplay', onCanPlay, { once: true });
     audio.addEventListener('error', async () => {
         albumArtEl.classList.remove('loading');
-        // If it looks like a rate-limit, back off and flag it
-        console.warn('[play] stream failed, might be rate-limited');
-        window.__audosRateLimited = true;
-        setTimeout(() => { window.__audosRateLimited = false; }, 60_000); // clear after 60s
 
-        // Only try the alternative for YouTube streams
+        // Local files have no network — any "error" here is a decode
+        // problem, not a connectivity problem. Log and bail.
+        if (track.source_type !== 'youtube_stream') {
+            console.warn('[play] local file error — ignoring network logic');
+            return;
+        }
+
+        // Mark this playback as interrupted — prevents `ended` from
+        // auto-advancing on a truncated buffer.
+        currentTrackInterrupted = true;
+
+        // ── Immediate offline short-circuit ──
+        if (!isOnline) {
+            console.warn('[play] stream error while offline — pausing to resume later');
+            resumePosition = audio.currentTime || 0;
+            pausedForOffline = true;
+            audio.pause();
+            isPlaying = false;
+            const playIcon = document.getElementById('play-icon') as HTMLImageElement;
+            if (playIcon) playIcon.src = '/icons/play.svg';
+            showToast('Lost connection — will resume when you\'re back online', 'info', 5000);
+            return;
+        }
+
+        // ── Consecutive-error counter ──
+        // Prevents cascade when the network dies but the OS hasn't told us.
+        const now = Date.now();
+        if (now - lastStreamErrorAt > STREAM_ERROR_WINDOW_MS) {
+            consecutiveStreamErrors = 0;   // reset if errors are spread apart
+        }
+        consecutiveStreamErrors++;
+        lastStreamErrorAt = now;
+
+        console.warn(`[play] stream error #${consecutiveStreamErrors}`);
+
+        // If we've hit the threshold, run a real connectivity check.
+        // If it fails, this is a network outage — pause, don't skip.
+        if (consecutiveStreamErrors >= STREAM_ERROR_THRESHOLD) {
+            console.warn('[play] too many rapid errors — verifying connectivity');
+            const stillOnline = await quickConnectivityCheck();
+
+            if (!stillOnline) {
+                console.warn('[play] connectivity check failed — treating as offline');
+                // Force our state to offline so subsequent logic agrees
+                applyOnlineState(false);
+                resumePosition = audio.currentTime || 0;
+                pausedForOffline = true;
+                audio.pause();
+                isPlaying = false;
+                const playIcon = document.getElementById('play-icon') as HTMLImageElement;
+                if (playIcon) playIcon.src = '/icons/play.svg';
+                showToast('Lost connection — will resume when you\'re back online', 'info', 5000);
+                return;
+            }
+
+            // We ARE online, but something's rate-limiting us. Cool down.
+            console.warn('[play] online but rate-limited — cooling down');
+            window.__audosRateLimited = true;
+            setTimeout(() => { window.__audosRateLimited = false; }, 60_000);
+            consecutiveStreamErrors = 0;   // reset before trying alt
+
+            // Fall through to try the alternative below
+        }
+
+        // ── Only try the alternative for YouTube streams ──
         if (track.source_type !== 'youtube_stream') return;
-
-        console.warn(`[play] stream failed for ${track.file_path_or_url}, searching alternative`);
 
         try {
             const alt = await invoke<YtTrack | null>('find_alternative', {
@@ -1545,13 +2055,18 @@ async function playTrack(index: number) {
 
             if (!alt) {
                 console.warn('[play] no alternative found, skipping');
-                setTimeout(() => goNextTrack(true), 300);
+                // Guard against runaway skipping: only auto-advance if
+                // we're not in a failure cascade.
+                if (consecutiveStreamErrors < STREAM_ERROR_THRESHOLD) {
+                    setTimeout(() => goNextTrack(true), 300);
+                } else {
+                    console.warn('[play] suppressing auto-skip during failure cascade');
+                }
                 return;
             }
 
             console.log(`[play] playing alternative ${alt.id}: ${alt.title}`);
 
-            // Swap the queue entry and retry
             queue[currentIndex] = {
                 id: alt.id,
                 source_type: 'youtube_stream',
@@ -1566,11 +2081,20 @@ async function playTrack(index: number) {
             audio.play().catch(e => console.error('[play] alt playback failed:', e));
         } catch (e) {
             console.error('[play] alternative search failed:', e);
-            setTimeout(() => goNextTrack(true), 300);
+            if (consecutiveStreamErrors < STREAM_ERROR_THRESHOLD) {
+                setTimeout(() => goNextTrack(true), 300);
+            } else {
+                console.warn('[play] suppressing auto-skip during failure cascade');
+            }
         }
     }, { once: true });
 
     audio.play().catch(e => console.error("Playback error:", e));
+
+    // Reset failure counter as soon as audio actually starts flowing
+    audio.addEventListener('playing', () => {
+        consecutiveStreamErrors = 0;
+    }, { once: true });
     // ── Prefetch the next track's stream URL in the background ──
     // Runs ~2 seconds after playback starts so it doesn't compete
     // with the current track's initial buffering.
@@ -1863,6 +2387,15 @@ if (nextBtn) nextBtn.addEventListener('click', () => goNextTrack(true));
 
 if (prevBtn) {
     prevBtn.addEventListener('click', () => {
+        // If the audio element isn't loaded with the UI's current track
+        // (e.g. offline guard blocked a stream), just re-select the loaded
+        // track instead of trying to restart playback.
+        if (audioLoadedIndex !== -1 && audioLoadedIndex !== currentIndex) {
+            playTrack(audioLoadedIndex);
+            return;
+        }
+
+        // Standard behavior: restart if we're past the 3s mark
         if (audio.currentTime > 3) {
             audio.currentTime = 0;
             audio.play();
@@ -1897,7 +2430,16 @@ function renderQueuePanel() {
         const clearBtn = document.createElement('button');
         clearBtn.className = 'queue-clear-btn';
         clearBtn.textContent = 'Clear';
-        clearBtn.onclick = () => { queue = []; originalQueue = []; currentIndex = -1; refreshQueuePanel(); };
+        clearBtn.onclick = () => {
+            queue = [];
+            originalQueue = [];
+            currentIndex = -1;
+            audioLoadedIndex = -1;
+            audio.pause();
+            audio.removeAttribute('src');
+            audio.load();
+            refreshQueuePanel();
+        };
         titleRow.appendChild(clearBtn);
     }
     panel.appendChild(titleRow);
@@ -1926,6 +2468,7 @@ function renderQueuePanel() {
         const item = document.createElement('div');
         item.className = 'q-item' + (isCurrent ? ' q-item--current' : '');
         item.setAttribute('data-swapy-item', `item-${track.id}-${realIdx}`);
+        item.setAttribute('data-source', track.source_type);
 
         const handle = document.createElement('div');
         handle.className = 'q-handle';
@@ -2074,9 +2617,49 @@ audio.addEventListener('timeupdate', () => {
         const handle = document.getElementById('progress-handle');
         if (handle) handle.style.left = `${percent}%`;
     }
+
+    // Keep a rolling "last known position" so we can resume accurately.
+    // Only update while actively playing — don't clobber a paused-for-offline
+    // position with a stale 0 from a paused element.
+    if (isPlaying && current > 0) {
+        resumePosition = current;
+    }
 });
 
-audio.addEventListener('ended', () => goNextTrack(false));
+audio.addEventListener('ended', () => {
+    const track = currentIndex >= 0 ? queue[currentIndex] : null;
+
+    // Local files always auto-advance on a real `ended` — there's no
+    // network to have interrupted them.
+    if (!track || track.source_type !== 'youtube_stream') {
+        goNextTrack(false);
+        return;
+    }
+
+    // If the current track was interrupted (network error, offline pause,
+    // or stream truncation), do NOT auto-advance — the user should
+    // resume the same track when connectivity returns.
+    if (currentTrackInterrupted) {
+        console.warn('[play] ended fired on interrupted track — not advancing');
+        return;
+    }
+
+    // Second safety net: if we ended well short of the expected duration,
+    // the stream was truncated. Don't advance.
+    if (track.duration && track.duration > 0) {
+        const played = audio.currentTime || 0;
+        const expected = track.duration;
+        if (played < expected - 5) {
+            console.warn(`[play] ended at ${played}s of ${expected}s — treating as truncated`);
+            currentTrackInterrupted = true;
+            pausedForOffline = true;
+            resumePosition = played;
+            return;
+        }
+    }
+
+    goNextTrack(false);
+});
 
 progressBg.addEventListener('click', (e) => {
     if (!audio.duration || !isFinite(audio.duration)) return;
@@ -2721,6 +3304,77 @@ profileBtn?.addEventListener('contextmenu', (e) => {
     setTimeout(() => document.addEventListener('click', closeMenu), 0);
 });
 
+/// One-time cleanup: if a liked track and a downloaded track have the same
+/// title+artist, merge them (the downloaded one wins). This fixes the
+/// duplicate state from before yt_id tracking existed.
+async function deduplicateDownloads() {
+    const tracks: Track[] = await invoke('get_tracks');
+    const downloaded = tracks.filter(t => t.source_type === 'downloaded_native');
+    if (downloaded.length === 0) return;
+
+    // Map downloaded (title|artist) -> local path
+    const dlMap = new Map<string, string>();
+    for (const d of downloaded) {
+        const key = `${(d.title || '').toLowerCase()}|${(d.artist_name || '').toLowerCase()}`;
+        dlMap.set(key, d.file_path_or_url);
+    }
+
+    let changed = false;
+
+    // Fix liked
+    try {
+        const liked: Track[] = JSON.parse(localStorage.getItem('liked_tracks_full') || '[]');
+        const filtered: Track[] = [];
+        const seen = new Set<string>();
+        for (const t of liked) {
+            const key = `${(t.title || '').toLowerCase()}|${(t.artist_name || '').toLowerCase()}`;
+            if (t.source_type === 'youtube_stream' && dlMap.has(key)) {
+                // Replace with downloaded version
+                const localPath = dlMap.get(key)!;
+                if (!seen.has(localPath)) {
+                    filtered.push({ ...t, source_type: 'downloaded_native', file_path_or_url: localPath });
+                    seen.add(localPath);
+                }
+                changed = true;
+            } else {
+                const id = t.file_path_or_url;
+                if (!seen.has(id)) {
+                    filtered.push(t);
+                    seen.add(id);
+                }
+            }
+        }
+        if (changed) {
+            localStorage.setItem('liked_tracks_full', JSON.stringify(filtered));
+            console.log('[dedup] cleaned liked songs');
+        }
+    } catch (e) { console.error('[dedup] liked failed:', e); }
+
+    // Fix playlists
+    if (changed) {
+        for (const pl of playlists) {
+            if (!pl.tracks) continue;
+            const newTracks: string[] = [];
+            const seen = new Set<string>();
+            for (const id of pl.tracks) {
+                // Find the track in currentTracks to check title/artist
+                const t = tracks.find(x => x.file_path_or_url === id);
+                if (t) {
+                    const key = `${(t.title || '').toLowerCase()}|${(t.artist_name || '').toLowerCase()}`;
+                    if (t.source_type === 'youtube_stream' && dlMap.has(key)) {
+                        const lp = dlMap.get(key)!;
+                        if (!seen.has(lp)) { newTracks.push(lp); seen.add(lp); }
+                        continue;
+                    }
+                }
+                if (!seen.has(id)) { newTracks.push(id); seen.add(id); }
+            }
+            pl.tracks = newTracks;
+        }
+        savePlaylists();
+        console.log('[dedup] cleaned playlists');
+    }
+}
 
 // ==========================================
 // Init
@@ -2750,6 +3404,7 @@ window.addEventListener('DOMContentLoaded', () => {
     
     // Wait for yt-dlp, scan playlists, render home
     await waitForYtDlp();
+    await deduplicateDownloads();
     // Now do the background work — splash is already gone
     const physicalPlaylists = playlists.filter(p => p.folderPath && !p.folderPath.startsWith('VIRTUAL_'));
     for (const pl of physicalPlaylists) {

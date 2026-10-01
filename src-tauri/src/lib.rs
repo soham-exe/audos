@@ -92,6 +92,7 @@ pub fn run() {
             db::insert_track_cmd,
             db::delete_track_cmd,
             db::cleanup_deleted_files_cmd,
+            db::get_downloaded_path,
             scanner::scan_directory,
             yt_bridge::search_youtube,
             download::download_yt_track,

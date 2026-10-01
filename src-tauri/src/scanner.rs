@@ -61,6 +61,7 @@ pub fn scan_dir(dir_path: &Path, conn: &Connection) {
             album.as_deref(),
             None, // duration
             thumbnail.as_deref(),
+            None, // yt_id — local files don't have one
         );
     }
 }
