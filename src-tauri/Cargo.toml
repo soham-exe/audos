@@ -1,6 +1,6 @@
-[package]
+﻿[package]
 name = "audos"
-version = "0.1.3"
+version = "0.1.4"
 description = "Custom music player"
 authors = ["Soham"]
 edition = "2021"
@@ -44,3 +44,4 @@ tauri-plugin-process = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_UI_Shell"] }
+
