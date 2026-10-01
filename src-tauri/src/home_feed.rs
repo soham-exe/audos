@@ -96,7 +96,7 @@ fn all_categories(year: i32) -> Vec<(&'static str, String)> {
 
         let region = user_region();
         let trending_query = if region == "Global" {
-            format!("top {} Global hits playlist", year)
+            format!("top Global hits {} playlist", year)
         } else {
             format!("top spotify hits {} {} playlist", year,region)
         };
