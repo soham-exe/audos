@@ -1,9 +1,57 @@
 import './styles.css';
-import { createSwapy } from 'swapy';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { open, confirm as tauriConfirm, message as tauriMessage } from '@tauri-apps/plugin-dialog';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+
+// ── Shared helpers (hoisted for use throughout the file) ──
+
+// Drag state — tracks any in-progress drag so drop handlers can
+// distinguish queue reorder, context→user, and external drops.
+const dragState = {
+    draggingIndex: -1,
+    draggingTrack: null as any,
+    source: null as 'user-queue' | 'context-queue' | 'external' | null,
+};
+
+function clearAllDropIndicators() {
+    document.querySelectorAll('.q-item--drop-above, .q-item--drop-below')
+        .forEach(el => el.classList.remove('q-item--drop-above', 'q-item--drop-below'));
+}
+
+// HTML escape — defends against quotes in track titles breaking innerHTML
+function escapeHtml(s: string): string {
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// localStorage key for queue open/closed state
+const QUEUE_OPEN_KEY = 'queue_open';
+
+// Global drag source tracking — catches drags from the main track list
+// so we can distinguish them from internal queue drags.
+document.addEventListener('dragstart', (e) => {
+    const target = e.target as HTMLElement;
+    // If the drag started inside the queue panel's user-queue section,
+    // the item handler already set the source. Don't override it.
+    if (target.closest('#queue-panel')) return;
+    if (target.closest('.track-row, .album-card, .q-item')) {
+        dragState.source = 'external';
+    }
+});
+
+document.addEventListener('dragend', () => {
+    // Only reset if this was an external drag (internal ones reset themselves)
+    if (dragState.source === 'external') {
+        dragState.source = null;
+        dragState.draggingTrack = null;
+        clearAllDropIndicators();
+    }
+});
 
 // ==========================================
 // Country list for region selection
@@ -342,35 +390,17 @@ interface Playlist {
 // ==========================================
 let isOnline = navigator.onLine;
 
-/// navigator.onLine is unreliable — it says "true" when you're on
-/// a Wi-Fi network with no internet. This actually pings a remote
-/// host to verify real connectivity.
-async function checkRealConnectivity(): Promise<boolean> {
-    if (!navigator.onLine) return false;   // already known-offline, skip the ping
-
-    try {
-        await fetch('https://www.youtube.com/favicon.ico', {
-            method: 'HEAD',
-            cache: 'no-store',
-            mode: 'no-cors',                    // avoid CORS preflight
-            signal: AbortSignal.timeout(4000),
-        });
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-/// Fast probe used inside the error handler. Shorter timeout so we don't
-/// stall the UI while deciding whether to skip the track.
-async function quickConnectivityCheck(): Promise<boolean> {
+/// Ping a lightweight Google endpoint that's designed for connectivity
+/// checks. Returns 204 No Content in <50ms on a healthy connection.
+/// Using GET (not HEAD) and no-cors so we don't need CORS headers.
+async function pingConnectivity(timeoutMs: number): Promise<boolean> {
     if (!navigator.onLine) return false;
     try {
-        await fetch('https://www.youtube.com/favicon.ico', {
-            method: 'HEAD',
+        await fetch('https://www.gstatic.com/generate_204', {
+            method: 'GET',
             cache: 'no-store',
             mode: 'no-cors',
-            signal: AbortSignal.timeout(2500),
+            signal: AbortSignal.timeout(timeoutMs),
         });
         return true;
     } catch {
@@ -378,7 +408,45 @@ async function quickConnectivityCheck(): Promise<boolean> {
     }
 }
 
-function applyOnlineState(online: boolean) {
+/// Full connectivity check with a generous timeout.
+/// Retries once on failure before reporting offline — a single slow
+/// DNS lookup shouldn't flip the whole UI.
+async function checkRealConnectivity(): Promise<boolean> {
+    if (!navigator.onLine) return false;
+    if (await pingConnectivity(5000)) return true;
+    // One retry, short delay, in case the first packet was dropped
+    await new Promise(r => setTimeout(r, 300));
+    return pingConnectivity(5000);
+}
+
+/// Fast probe used inside the stream error handler.
+/// Also retries once — the error handler already waited for the timeout,
+/// so a second attempt costs at most 1.5s more.
+async function quickConnectivityCheck(): Promise<boolean> {
+    if (!navigator.onLine) return false;
+    if (await pingConnectivity(3000)) return true;
+    await new Promise(r => setTimeout(r, 200));
+    return pingConnectivity(3000);
+}
+
+// Consecutive offline reports required before we actually flip the UI.
+// Prevents a single slow ping from triggering the offline banner.
+let consecutiveOfflineReports = 0;
+const OFFLINE_CONFIRMATIONS_REQUIRED = 2;
+
+function applyOnlineState(online: boolean, options?: { force?: boolean }) {
+    if (!online && !options?.force) {
+        // Debounce: require 2 consecutive "offline" signals
+        consecutiveOfflineReports++;
+        if (consecutiveOfflineReports < OFFLINE_CONFIRMATIONS_REQUIRED) {
+            console.log(`[net] offline signal ${consecutiveOfflineReports}/${OFFLINE_CONFIRMATIONS_REQUIRED} — waiting for confirmation`);
+            return;
+        }
+    }
+    if (online) {
+        consecutiveOfflineReports = 0;
+    }
+
     const changed = online !== isOnline;
     isOnline = online;
 
@@ -410,8 +478,8 @@ function applyOnlineState(online: boolean) {
         console.log(`[net] ${online ? 'online' : 'offline'}`);
         if (online) {
             // ── Resume any paused-for-offline playback ──
-            if (pausedForOffline && currentIndex >= 0 && queue[currentIndex]) {
-                const track = queue[currentIndex];
+            if (pausedForOffline && currentTrack) {
+                const track = currentTrack;
                 console.log(`[net] resuming "${track.title}" at ${resumePosition}s`);
 
                 // Rebuild the source URL (the old one is dead after the error)
@@ -452,11 +520,11 @@ function applyOnlineState(online: boolean) {
         } else {
             // Went offline — capture the current position BEFORE the buffer
             // drains, so we can resume precisely when we come back.
-            if (currentIndex >= 0 && isPlaying && audio.currentTime > 0) {
+            if (currentTrack && isPlaying && audio.currentTime > 0) {
                 resumePosition = audio.currentTime;
                 pausedForOffline = true;
                 currentTrackInterrupted = true;
-                console.log(`[net] offline — will resume "${queue[currentIndex]?.title}" at ${resumePosition}s`);
+                console.log(`[net] offline — will resume "${currentTrack.title}" at ${resumePosition}s`);
             }
 
             // Swap home feed for a placeholder
@@ -475,20 +543,32 @@ function applyOnlineState(online: boolean) {
 }
 
 window.addEventListener('online', () => {
-    // Verify with a real ping before trusting the event
-    checkRealConnectivity().then(applyOnlineState);
+    // Trust the OS event enough to clear the offline state, but verify
+    // in the background so a captive portal doesn't leave us stuck.
+    consecutiveOfflineReports = 0;
+    checkRealConnectivity().then(result => {
+        // If verification agrees we're online, clear it. If verification
+        // fails, we stay whatever we currently are.
+        if (result) applyOnlineState(true, { force: true });
+    });
 });
 
 window.addEventListener('offline', () => {
-    applyOnlineState(false);
+    // OS event is authoritative — skip the debounce and go offline
+    // immediately. This keeps things snappy when the user really pulls
+    // the plug.
+    applyOnlineState(false, { force: true });
 });
 
-// Periodic check — every 30s, verify we're really online
+// Periodic check — every 60s, verify we're really online
 // (handles Wi-Fi with no internet, captive portals, etc.)
+// `force: false` means an isolated failure won't flip the UI;
+// it needs two consecutive failures. The OS offline event still
+// forces immediately.
 setInterval(async () => {
     const real = await checkRealConnectivity();
     applyOnlineState(real);
-}, 30_000);
+}, 60_000);
 
 // Initial check on boot — navigator.onLine lies on startup sometimes
 checkRealConnectivity().then(applyOnlineState);
@@ -565,18 +645,27 @@ const timeTotal = document.querySelector('.playback-bar .time-total') as HTMLEle
 const audio = new Audio();
 let currentTracks: Track[] = [];
 let displayedTracks: Track[] = [];
-let queue: Track[] = [];
-let originalQueue: Track[] = [];
-let currentIndex = -1;
+
+// ── Playback queue model (Spotify-style) ────────────────────
+// userQueue: tracks the user explicitly added (Play Next / Add to Queue).
+//   Plays first, in insertion order, fully user-controlled.
+// contextQueue: the source list the user started playing from
+//   (playlist, album, home feed category, search results, etc.).
+//   Plays after userQueue empties. Radio-extends at the end.
+let userQueue: Track[] = [];
+let contextQueue: Track[] = [];
+let contextIndex = -1;
+let contextName = '';
+let currentTrack: Track | null = null;
+
+// Snapshot of contextQueue before shuffle, so we can restore original order
+let originalContextQueue: Track[] = [];
+
 let shuffleMode: 0 | 1 = 0;
 let repeatMode: 0 | 1 | 2 = 0;
 let isPlaying = false;
-let proxyPort: number | null = null;    
+let proxyPort: number | null = null;
 let downloadMode = localStorage.getItem('download_mode') || 'manual';
-// Index of the track actually loaded in the <audio> element. Kept in
-// sync with playback, NOT with UI selection. When the offline guard
-// blocks a track, `currentIndex` moves but `audioLoadedIndex` doesn't.
-let audioLoadedIndex = -1;
 
 // Remember playback position so we can resume after a network blip
 let pausedForOffline = false;
@@ -602,12 +691,17 @@ declare global {
 }
 window.__audosRateLimited = false;
 
-/// True if the currently playing queue entry is a streaming (network) track.
+/// True if the currently playing track is a streaming (network) track.
 /// Used to gate network-event handling so local files aren't affected.
 function isCurrentTrackStreaming(): boolean {
-    if (currentIndex < 0 || currentIndex >= queue.length) return false;
-    return queue[currentIndex]?.source_type === 'youtube_stream';
+    return currentTrack?.source_type === 'youtube_stream';
 }
+
+/// Track actually loaded in the <audio> element. Used by prev to detect
+/// desync (e.g. offline guard blocked a track but audio didn't move).
+let audioLoadedTrack: Track | null = null;
+
+
 
 // ==========================================
 // Sidebar Collapse
@@ -689,41 +783,67 @@ function addToHistory(track: Track) {
 // ==========================================
 // Queue Logic
 // ==========================================
-function applyShuffle(currentTrack: Track | undefined, tracks: Track[]): Track[] {
-    let remaining = currentTrack ? tracks.filter(t => t !== currentTrack) : [...tracks];
+
+/// Fisher-Yates shuffle of a copy. Does not touch userQueue.
+function shuffled<T>(arr: T[]): T[] {
+    const out = [...arr];
+    for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+}
+
+/// Start playing a new context (a playlist, album, home feed category,
+/// search results, etc.). Clears the user queue — matches Spotify's
+/// behavior when you click into a new playlist.
+///
+/// `tracks` — the full list the user is choosing from
+/// `startIndex` — which track in that list they clicked
+/// `name` — display name for "Next from: <name>"
+function playContext(tracks: Track[], startIndex: number, name: string) {
+    if (tracks.length === 0) return;
+
+    originalContextQueue = [...tracks];
 
     if (shuffleMode === 1) {
-        for (let i = remaining.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
-        }
-    }
-
-    return currentTrack ? [currentTrack, ...remaining] : remaining;
-}
-
-function setQueue(newQueue: Track[], startIndex = 0) {
-    originalQueue = [...newQueue];
-
-    if (shuffleMode > 0) {
-        const currentTrack = newQueue[startIndex];
-        queue = applyShuffle(currentTrack, newQueue);
-        currentIndex = currentTrack ? 0 : -1;
+        // Shuffle the whole list, but put the clicked track at position 0
+        const clicked = tracks[startIndex];
+        const rest = tracks.filter((_, i) => i !== startIndex);
+        contextQueue = [clicked, ...shuffled(rest)];
+        contextIndex = 0;
     } else {
-        queue = [...newQueue];
-        currentIndex = startIndex;
+        contextQueue = [...tracks];
+        contextIndex = startIndex;
     }
+
+    // NOTE: userQueue is intentionally NOT cleared here. Tracks the user
+    // explicitly queued should survive context switches — the queue is
+    // their intent, not the context's.
+
+    contextName = name;
+    playTrack(contextQueue[contextIndex]);
     refreshQueuePanel();
 }
 
+/// Insert a track into the user queue. `next=true` puts it at the
+/// front of the queue; otherwise it goes to the end.
 function addToQueue(track: Track, next = false) {
     if (next) {
-        queue.splice(currentIndex + 1, 0, track);
+        userQueue.unshift(track);
     } else {
-        queue.push(track);
+        userQueue.push(track);
     }
-    originalQueue.push(track);
     refreshQueuePanel();
+}
+
+/// Remove a specific item from the user queue by reference.
+function removeFromUserQueue(track: Track) {
+    const idx = userQueue.indexOf(track);
+    if (idx !== -1) {
+        userQueue.splice(idx, 1);
+        refreshQueuePanel();
+    }
 }
 
 // ==========================================
@@ -1133,8 +1253,7 @@ function renderHomeView() {
                     <div class="album-artist">${t.uploader}</div>
                 `;
                 card.onclick = () => {
-                    setQueue(allTracks, i);
-                    playTrack(currentIndex);
+                    playContext(allTracks, i, feed.category);
                 };
                 grid.appendChild(card);
             });
@@ -1364,12 +1483,21 @@ async function fetchAndRenderTracks() {
 
         currentTracks = tracks;
 
-        // Re-hydrate queue with fresh object references
-        const currentPath = queue[currentIndex]?.file_path_or_url;
+        // Re-hydrate queues with fresh object references
+        const currentPath = currentTrack?.file_path_or_url;
         if (currentPath) {
-            queue = queue.map(qt => currentTracks.find(t => t.file_path_or_url === qt.file_path_or_url) ?? qt);
-            originalQueue = originalQueue.map(qt => currentTracks.find(t => t.file_path_or_url === qt.file_path_or_url) ?? qt);
-            currentIndex = queue.findIndex(t => t.file_path_or_url === currentPath);
+            const rehydrate = (t: Track) =>
+                currentTracks.find(x => x.file_path_or_url === t.file_path_or_url) ?? t;
+
+            userQueue = userQueue.map(rehydrate);
+            contextQueue = contextQueue.map(rehydrate);
+            originalContextQueue = originalContextQueue.map(rehydrate);
+            if (currentTrack) {
+                const fresh = rehydrate(currentTrack);
+                currentTrack = fresh;
+                const cIdx = contextQueue.indexOf(fresh);
+                if (cIdx !== -1) contextIndex = cIdx;
+            }
         }
 
         renderSidebarPlaylist();
@@ -1440,21 +1568,19 @@ function migrateTrackEverywhere(ytId: string, localPath: string) {
         }
     } catch (e) { console.error('[migrate] history failed:', e); }
 
-    // ── Queue + originalQueue + currently playing ──
+    // ── Both queues + currently playing ──
     let queueChanged = false;
-    for (const t of queue) {
+    const migrate = (t: Track) => {
         if (t.source_type === 'youtube_stream' && t.file_path_or_url === ytId) {
             t.source_type = 'downloaded_native';
             t.file_path_or_url = localPath;
             queueChanged = true;
         }
-    }
-    for (const t of originalQueue) {
-        if (t.source_type === 'youtube_stream' && t.file_path_or_url === ytId) {
-            t.source_type = 'downloaded_native';
-            t.file_path_or_url = localPath;
-        }
-    }
+    };
+    for (const t of userQueue) migrate(t);
+    for (const t of contextQueue) migrate(t);
+    for (const t of originalContextQueue) migrate(t);
+    if (currentTrack) migrate(currentTrack);
     if (queueChanged) refreshQueuePanel();
 }
 
@@ -1603,7 +1729,7 @@ function renderTracks(tracks: Track[], titleOverride?: string) {
     item.appendChild(indexEl);
 
     // ── Currently playing marker (themed via --track-playing-text) ──
-    if (currentIndex !== -1 && queue[currentIndex]?.file_path_or_url === track.file_path_or_url) {
+    if (currentTrack && currentTrack.file_path_or_url === track.file_path_or_url) {
         item.classList.add('track-row--playing');
     }
 
@@ -1661,8 +1787,10 @@ function renderTracks(tracks: Track[], titleOverride?: string) {
     }
 
     item.onclick = () => {
-        setQueue(tracks, index);
-        playTrack(currentIndex);
+        const ctxName = isShowingPlaylist && activePlaylistIndex >= 0
+            ? playlists[activePlaylistIndex]?.name ?? 'Playlist'
+            : 'Results';
+        playContext(tracks, index, ctxName);
     };
 
     item.draggable = true;
@@ -1790,8 +1918,9 @@ async function deleteTrackFromDatabase(track: Track) {
 
         // ── Remove from in-memory state ──
         currentTracks = currentTracks.filter(t => t.file_path_or_url !== track.file_path_or_url);
-        queue = queue.filter(t => t.file_path_or_url !== track.file_path_or_url);
-        originalQueue = originalQueue.filter(t => t.file_path_or_url !== track.file_path_or_url);
+        userQueue = userQueue.filter(t => t.file_path_or_url !== track.file_path_or_url);
+        contextQueue = contextQueue.filter(t => t.file_path_or_url !== track.file_path_or_url);
+        originalContextQueue = originalContextQueue.filter(t => t.file_path_or_url !== track.file_path_or_url);
 
         for (const pl of playlists) {
             if (pl.tracks) {
@@ -1800,8 +1929,8 @@ async function deleteTrackFromDatabase(track: Track) {
         }
         savePlaylists();
 
-        if (currentIndex !== -1 && queue[currentIndex]?.file_path_or_url === track.file_path_or_url) {
-            currentIndex = -1;
+        if (currentTrack?.file_path_or_url === track.file_path_or_url) {
+            currentTrack = null;
             audio.pause();
         }
 
@@ -1890,16 +2019,14 @@ searchInput.addEventListener('input', (e) => {
 // ==========================================
 // Playback
 // ==========================================
-async function playTrack(index: number) {
-    if (index < 0 || index >= queue.length) return;
+async function playTrack(track: Track) {
+    if (!track) return;
 
-    currentIndex = index;
-    const track = queue[index];
+    currentTrack = track;
 
     // Block streaming tracks when offline — but still update the UI so
     // the player bar reflects the new track selection.
     if (track.source_type === 'youtube_stream' && !isOnline) {
-        // Update the now-playing UI to reflect the selected track
         titleEl.textContent = track.title || 'Unknown Title';
         artistEl.textContent = track.artist_name || 'Unknown Artist';
         if (track.thumbnail) {
@@ -1912,16 +2039,12 @@ async function playTrack(index: number) {
         }
         updateLikeButton(track);
 
-        // Make sure we're paused and the icon reflects that.
-        // Also clear the loading shimmer so the album art isn't stuck.
         audio.pause();
         albumArtEl.classList.remove('loading', 'ready');
         isPlaying = false;
         const playIcon = document.getElementById('play-icon') as HTMLImageElement;
         if (playIcon) playIcon.src = '/icons/play.svg';
 
-        // Remember position so if they come back online we resume the
-        // RIGHT track (the one currently in queue[currentIndex]).
         resumePosition = 0;
         pausedForOffline = true;
 
@@ -1932,11 +2055,8 @@ async function playTrack(index: number) {
 
     addToHistory(track);
 
-    // Fresh track → clear the interruption flag
     currentTrackInterrupted = false;
 
-    // Local tracks have no network dependency. Wipe all streaming state
-    // so a later "online"/"offline" event can't touch this playback.
     if (track.source_type !== 'youtube_stream') {
         pausedForOffline = false;
         resumePosition = 0;
@@ -1968,7 +2088,7 @@ async function playTrack(index: number) {
     }
 
     // The audio element now holds this track
-    audioLoadedIndex = index;
+    audioLoadedTrack = track;
 
     const onCanPlay = () => {
         clearThumbLoading();
@@ -2023,7 +2143,7 @@ async function playTrack(index: number) {
             if (!stillOnline) {
                 console.warn('[play] connectivity check failed — treating as offline');
                 // Force our state to offline so subsequent logic agrees
-                applyOnlineState(false);
+                applyOnlineState(false, { force: true });
                 resumePosition = audio.currentTime || 0;
                 pausedForOffline = true;
                 audio.pause();
@@ -2067,7 +2187,7 @@ async function playTrack(index: number) {
 
             console.log(`[play] playing alternative ${alt.id}: ${alt.title}`);
 
-            queue[currentIndex] = {
+            const altTrack: Track = {
                 id: alt.id,
                 source_type: 'youtube_stream',
                 file_path_or_url: alt.id,
@@ -2076,6 +2196,16 @@ async function playTrack(index: number) {
                 duration: alt.duration,
                 thumbnail: alt.thumbnail,
             };
+
+            // Swap the current track in whichever queue holds it
+            const uIdx = userQueue.indexOf(track);
+            if (uIdx !== -1) {
+                userQueue[uIdx] = altTrack;
+            } else if (contextIndex >= 0 && contextQueue[contextIndex] === track) {
+                contextQueue[contextIndex] = altTrack;
+            }
+            currentTrack = altTrack;
+            audioLoadedTrack = altTrack;
 
             audio.src = `http://127.0.0.1:${proxyPort}/stream?yt_id=${alt.id}`;
             audio.play().catch(e => console.error('[play] alt playback failed:', e));
@@ -2096,18 +2226,18 @@ async function playTrack(index: number) {
         consecutiveStreamErrors = 0;
     }, { once: true });
     // ── Prefetch the next track's stream URL in the background ──
-    // Runs ~2 seconds after playback starts so it doesn't compete
-    // with the current track's initial buffering.
-    // Only prefetch if we're not currently rate-limited
-    if (currentIndex + 1 < queue.length && proxyPort && !window.__audosRateLimited) {
-        const next = queue[currentIndex + 1];
-        if (next.source_type === 'youtube_stream') {
+    if (proxyPort && !window.__audosRateLimited) {
+        const nextTrack = userQueue[0]
+            ?? (contextIndex + 1 < contextQueue.length ? contextQueue[contextIndex + 1] : null);
+
+        if (nextTrack && nextTrack.source_type === 'youtube_stream') {
             setTimeout(() => {
-                if (currentIndex + 1 >= queue.length) return;
-                if (queue[currentIndex + 1]?.id !== next.id) return;
+                // Bail if the queue changed under us
+                const stillNext = userQueue[0] ?? (contextIndex + 1 < contextQueue.length ? contextQueue[contextIndex + 1] : null);
+                if (stillNext?.id !== nextTrack.id) return;
                 if (window.__audosRateLimited) return;
 
-                fetch(`http://127.0.0.1:${proxyPort}/stream?yt_id=${next.file_path_or_url}`, {
+                fetch(`http://127.0.0.1:${proxyPort}/stream?yt_id=${nextTrack.file_path_or_url}`, {
                     headers: { 'Range': 'bytes=0-1023' }
                 }).catch(() => {});
             }, 4000);
@@ -2135,8 +2265,11 @@ async function playTrack(index: number) {
         navigator.mediaSession.setActionHandler('play', () => togglePlay());
         navigator.mediaSession.setActionHandler('pause', () => togglePlay());
         navigator.mediaSession.setActionHandler('previoustrack', () => {
-            const prev = currentIndex - 1;
-            if (prev >= 0) playTrack(prev);
+            if (contextIndex > 0) {
+                contextIndex--;
+                playTrack(contextQueue[contextIndex]);
+                refreshQueuePanel();
+            }
         });
         navigator.mediaSession.setActionHandler('nexttrack', () => goNextTrack(true));
     }
@@ -2174,32 +2307,32 @@ async function playTrack(index: number) {
     maybeExtendQueue();
 }
 // ==========================================
-// Queue auto-extension (radio mode)
+// Context auto-extension (radio mode)
 // ==========================================
 let extendingQueue = false;
-const QUEUE_EXTEND_THRESHOLD = 2;   // extend when 2 or fewer tracks remain
-const MAX_AUTO_QUEUE = 200;          // hard cap to prevent infinite growth
+const QUEUE_EXTEND_THRESHOLD = 2;
+const MAX_AUTO_QUEUE = 200;
 
 async function maybeExtendQueue() {
     if (extendingQueue) return;
-    if (currentIndex < 0) return;
+    if (!currentTrack) return;
 
-    const remaining = queue.length - currentIndex - 1;
+    // Only count context tracks — user queue is user-controlled
+    const remaining = contextQueue.length - contextIndex - 1;
     if (remaining > QUEUE_EXTEND_THRESHOLD) return;
-    if (queue.length >= MAX_AUTO_QUEUE) {
-        console.log('[radio] Queue at max size, not extending');
+    if (contextQueue.length >= MAX_AUTO_QUEUE) {
+        console.log('[radio] Context at max size, not extending');
         return;
     }
 
-    // Only extend for YouTube tracks — local files don't have a "mix"
-    const lastTrack = queue[queue.length - 1];
+    const lastTrack = contextQueue[contextQueue.length - 1];
     if (!lastTrack || lastTrack.source_type !== 'youtube_stream') {
-        console.log('[radio] Queue ends with non-YT track, skipping extension');
+        console.log('[radio] Context ends with non-YT track, skipping extension');
         return;
     }
 
     extendingQueue = true;
-    console.log(`[radio] Queue running low (${remaining} left), extending from: ${lastTrack.title}`);
+    console.log(`[radio] Context running low (${remaining} left), extending from: ${lastTrack.title}`);
 
     try {
         const related: YtTrack[] = await invoke('fetch_related_tracks', {
@@ -2211,16 +2344,14 @@ async function maybeExtendQueue() {
             return;
         }
 
-        // Filter out tracks already in the queue (by yt id)
-        const existingIds = new Set(queue.map(t => t.file_path_or_url));
+        const existingIds = new Set(contextQueue.map(t => t.file_path_or_url));
         const fresh = related.filter(t => !existingIds.has(t.id));
 
         if (fresh.length === 0) {
-            console.log('[radio] All related tracks already in queue');
+            console.log('[radio] All related tracks already in context');
             return;
         }
 
-        // Convert to Track objects and append
         const newTracks: Track[] = fresh.map(t => ({
             id: t.id,
             source_type: 'youtube_stream',
@@ -2231,13 +2362,11 @@ async function maybeExtendQueue() {
             thumbnail: t.thumbnail
         }));
 
-        queue.push(...newTracks);
-        originalQueue.push(...newTracks);
-
-        console.log(`[radio] Appended ${newTracks.length} tracks to queue`);
+        contextQueue.push(...newTracks);
+        console.log(`[radio] Appended ${newTracks.length} tracks to context`);
         refreshQueuePanel();
     } catch (e) {
-        console.error('[radio] Failed to extend queue:', e);
+        console.error('[radio] Failed to extend context:', e);
     } finally {
         extendingQueue = false;
     }
@@ -2273,21 +2402,27 @@ if (shuffleBtn) {
         const img = shuffleBtn.querySelector('img');
         if (img) img.src = '/icons/shuffle.svg';
 
-        if (shuffleMode === 1 && queue.length > 0) {
-            if (originalQueue.length === 0) originalQueue = [...queue];
-            const currentTrack = queue[currentIndex];
-            queue = applyShuffle(currentTrack, originalQueue);
-            currentIndex = currentTrack ? 0 : -1;
-            refreshQueuePanel();
-        } else if (shuffleMode === 0 && originalQueue.length > 0) {
-            const currentTrack = queue[currentIndex];
-            queue = [...originalQueue];
-            currentIndex = currentTrack
-                ? queue.findIndex(t => t.file_path_or_url === currentTrack.file_path_or_url)
-                : -1;
-            if (currentIndex === -1) currentIndex = 0;
-            refreshQueuePanel();
+        if (contextQueue.length === 0) return;
+
+        const currentlyPlaying = currentTrack;
+
+        if (shuffleMode === 1) {
+            // Remember the original order
+            if (originalContextQueue.length === 0) originalContextQueue = [...contextQueue];
+            // Shuffle everything after the current track
+            const idx = currentlyPlaying ? contextQueue.indexOf(currentlyPlaying) : -1;
+            const before = contextQueue.slice(0, Math.max(0, idx + 1));
+            const after = contextQueue.slice(Math.max(0, idx + 1));
+            contextQueue = [...before, ...shuffled(after)];
+        } else {
+            // Restore original order, keeping current track active
+            contextQueue = [...originalContextQueue];
+            if (currentlyPlaying) {
+                const newIdx = contextQueue.indexOf(currentlyPlaying);
+                if (newIdx !== -1) contextIndex = newIdx;
+            }
         }
+        refreshQueuePanel();
     });
 }
 
@@ -2320,30 +2455,42 @@ async function goNextTrack(forceNext = false) {
         return;
     }
 
-    if (currentIndex + 1 < queue.length) {
-        playTrack(currentIndex + 1);
+    // ── 1. User queue first ──
+    if (userQueue.length > 0) {
+        const next = userQueue.shift()!;
+        playTrack(next);
+        refreshQueuePanel();
         return;
     }
 
-    // We're at the end of the queue.
-    // For repeat-all, loop back to start.
-    if (isRepeatAll && queue.length > 0) {
+    // ── 2. Then context ──
+    if (contextIndex + 1 < contextQueue.length) {
+        contextIndex++;
+        playTrack(contextQueue[contextIndex]);
+        refreshQueuePanel();
+        return;
+    }
+
+    // ── 3. End of context → repeat-all loops back ──
+    if (isRepeatAll && contextQueue.length > 0) {
         if (shuffleMode > 0) {
-            queue = applyShuffle(undefined, originalQueue.length > 0 ? originalQueue : queue);
-            refreshQueuePanel();
+            const source = originalContextQueue.length > 0 ? originalContextQueue : contextQueue;
+            contextQueue = shuffled(source);
         }
-        playTrack(0);
+        contextIndex = 0;
+        playTrack(contextQueue[0]);
+        refreshQueuePanel();
         return;
     }
 
-    // Otherwise, try to extend the queue from the last track's YouTube mix.
-    const lastTrack = queue[queue.length - 1];
+    // ── 4. Radio-extend the context ──
+    const lastTrack = contextQueue[contextQueue.length - 1];
     if (!lastTrack || lastTrack.source_type !== 'youtube_stream') {
         console.log('[radio] Nothing to extend from');
         return;
     }
 
-    console.log('[radio] End of queue reached, fetching more...');
+    console.log('[radio] End of context, fetching more...');
 
     try {
         const related: YtTrack[] = await invoke('fetch_related_tracks', {
@@ -2355,7 +2502,7 @@ async function goNextTrack(forceNext = false) {
             return;
         }
 
-        const existingIds = new Set(queue.map(t => t.file_path_or_url));
+        const existingIds = new Set(contextQueue.map(t => t.file_path_or_url));
         const fresh = related.filter(t => !existingIds.has(t.id));
         if (fresh.length === 0) return;
 
@@ -2369,12 +2516,12 @@ async function goNextTrack(forceNext = false) {
             thumbnail: t.thumbnail
         }));
 
-        queue.push(...newTracks);
-        originalQueue.push(...newTracks);
+        contextQueue.push(...newTracks);
         refreshQueuePanel();
 
-        // Now play the first new track
-        playTrack(currentIndex + 1);
+        // Advance to the first new track
+        contextIndex++;
+        playTrack(contextQueue[contextIndex]);
     } catch (e) {
         console.error('[radio] Extension failed:', e);
     }
@@ -2387,21 +2534,27 @@ if (nextBtn) nextBtn.addEventListener('click', () => goNextTrack(true));
 
 if (prevBtn) {
     prevBtn.addEventListener('click', () => {
-        // If the audio element isn't loaded with the UI's current track
-        // (e.g. offline guard blocked a stream), just re-select the loaded
-        // track instead of trying to restart playback.
-        if (audioLoadedIndex !== -1 && audioLoadedIndex !== currentIndex) {
-            playTrack(audioLoadedIndex);
+        // If the audio element is playing a different track than our UI
+        // state (e.g. offline guard blocked a stream), re-select what's
+        // actually loaded.
+        if (audioLoadedTrack && audioLoadedTrack !== currentTrack) {
+            playTrack(audioLoadedTrack);
             return;
         }
 
-        // Standard behavior: restart if we're past the 3s mark
+        // Standard: restart if we're past the 3s mark
         if (audio.currentTime > 3) {
             audio.currentTime = 0;
             audio.play();
-        } else {
-            const prev = currentIndex - 1;
-            if (prev >= 0) playTrack(prev);
+            return;
+        }
+
+        // Otherwise, step back in context only (Spotify behavior —
+        // user queue items don't get "un-played")
+        if (contextIndex > 0) {
+            contextIndex--;
+            playTrack(contextQueue[contextIndex]);
+            refreshQueuePanel();
         }
     });
 }
@@ -2418,146 +2571,661 @@ function renderQueuePanel() {
     const panel = document.createElement('div');
     panel.id = 'queue-panel';
 
+    // ── Peek content (only shown when the column is collapsed) ──
+    // Shows a vertical mini-stack: current track on top, then the next
+    // few upcoming tracks, then a badge and the expand button pinned
+    // to the bottom.
+    const peek = document.createElement('div');
+    peek.className = 'queue-peek';
+
+    // ── Thumb strip ──
+    const strip = document.createElement('div');
+    strip.className = 'queue-peek-strip';
+
+    // Current track first, then up to 6 upcoming
+    const peekTracks: (Track | null)[] = [
+        currentTrack ?? null,
+        ...userQueue.slice(0, 6),
+        ...(contextIndex >= 0
+            ? contextQueue.slice(contextIndex + 1, contextIndex + 7)
+            : [])
+    ].slice(0, 7);
+
+    const seen = new Set<string>();
+    peekTracks.forEach((t, i) => {
+        // De-dupe by URL to avoid showing the same song twice
+        if (t) {
+            const key = t.file_path_or_url;
+            if (seen.has(key)) return;
+            seen.add(key);
+        }
+
+        const cell = document.createElement('div');
+        cell.className = 'queue-peek-cell' + (i === 0 && t ? ' queue-peek-cell--current' : '');
+
+        if (t?.thumbnail) {
+            cell.style.backgroundImage = `url('${t.thumbnail}')`;
+        } else {
+            cell.innerHTML = `<img src="/icons/music-note.svg" />`;
+        }
+
+        strip.appendChild(cell);
+    });
+
+    // If nothing is playing, show a single muted placeholder
+    if (peekTracks.length === 0) {
+        const cell = document.createElement('div');
+        cell.className = 'queue-peek-cell queue-peek-cell--empty';
+        cell.innerHTML = `<img src="/icons/queue.svg" />`;
+        strip.appendChild(cell);
+    }
+
+    peek.appendChild(strip);
+
+    // ── Footer: badge + expand button pinned at the bottom ──
+    const footer = document.createElement('div');
+    footer.className = 'queue-peek-footer';
+
+    const upcoming = userQueue.length + (contextQueue.length - Math.max(0, contextIndex + 1));
+    if (upcoming > 0) {
+        const badge = document.createElement('div');
+        badge.className = 'queue-peek-badge';
+        badge.textContent = String(upcoming);
+        footer.appendChild(badge);
+    }
+
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'queue-peek-expand';
+    expandBtn.title = 'Open queue';
+    expandBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+    `;
+    expandBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        applyQueueState(true);
+        localStorage.setItem(QUEUE_OPEN_KEY, 'true');
+    });
+    footer.appendChild(expandBtn);
+
+    peek.appendChild(footer);
+
+    panel.appendChild(peek);
+
+    // ── Header ──
     const titleRow = document.createElement('div');
     titleRow.className = 'queue-header';
 
+    const upcomingCount = userQueue.length + (contextQueue.length - Math.max(0, contextIndex + 1));
     titleRow.innerHTML = `
         <h3>Queue</h3>
-        <span class="queue-count">${queue.length} tracks</span>
+        <span class="queue-count">${upcomingCount} tracks</span>
     `;
 
-    if (queue.length > 0) {
+    const headerActions = document.createElement('div');
+    headerActions.className = 'queue-header-actions';
+
+    if (upcomingCount > 0) {
         const clearBtn = document.createElement('button');
         clearBtn.className = 'queue-clear-btn';
         clearBtn.textContent = 'Clear';
         clearBtn.onclick = () => {
-            queue = [];
-            originalQueue = [];
-            currentIndex = -1;
-            audioLoadedIndex = -1;
+            userQueue = [];
+            contextQueue = [];
+            originalContextQueue = [];
+            contextIndex = -1;
+            currentTrack = null;
+            audioLoadedTrack = null;
             audio.pause();
             audio.removeAttribute('src');
             audio.load();
             refreshQueuePanel();
         };
-        titleRow.appendChild(clearBtn);
+        headerActions.appendChild(clearBtn);
     }
+
+    // Collapse button — mirrors the peek expand button, rotates 180°
+    // when the queue is open so the chevron always points "inward".
+    const collapseBtn = document.createElement('button');
+    collapseBtn.className = 'queue-collapse-btn';
+    collapseBtn.title = 'Collapse queue';
+    collapseBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+    `;
+    collapseBtn.addEventListener('click', () => {
+        applyQueueState(false);
+        localStorage.setItem(QUEUE_OPEN_KEY, 'false');
+    });
+    headerActions.appendChild(collapseBtn);
+
+    titleRow.appendChild(headerActions);
     panel.appendChild(titleRow);
 
-    if (queue.length === 0) {
+    // ── Now Playing ──
+    if (currentTrack) {
+        const nowSection = document.createElement('div');
+        nowSection.className = 'queue-section queue-section--now';
+        nowSection.innerHTML = `<div class="queue-section-title">Now playing</div>`;
+        nowSection.appendChild(buildQueueItem(currentTrack, {
+            draggable: false,
+            removable: false,
+            onClick: () => {},
+        }));
+        panel.appendChild(nowSection);
+    }
+
+    // ── Next in queue (userQueue) ──
+    if (userQueue.length > 0) {
+        const userSection = document.createElement('div');
+        userSection.className = 'queue-section queue-section--user';
+
+        const headerRow = document.createElement('div');
+        headerRow.className = 'queue-section-header';
+        headerRow.innerHTML = `
+            <div class="queue-section-title">Next in queue</div>
+            <div class="queue-section-count">${userQueue.length}</div>
+        `;
+        userSection.appendChild(headerRow);
+
+        const list = document.createElement('div');
+        list.className = 'queue-list';
+        list.dataset.section = 'user';
+
+        userQueue.forEach((track, idx) => {
+            list.appendChild(buildQueueItem(track, {
+                draggable: true,
+                removable: true,
+                index: idx,
+                onClick: () => {
+                    // Clicking a user-queued item promotes it to current
+                    // and removes it from the queue.
+                    userQueue.splice(idx, 1);
+                    playTrack(track);
+                    refreshQueuePanel();
+                },
+                onRemove: () => {
+                    userQueue.splice(idx, 1);
+                    refreshQueuePanel();
+                },
+            }));
+        });
+
+        // Drop zone for external drags (from main view)
+        let dragDepth = 0;
+        const setActive = (on: boolean) => userSection.classList.toggle('drag-over', on);
+        userSection.addEventListener('dragenter', (e) => {
+            if (!e.dataTransfer?.types.includes('text/plain')) return;
+            e.preventDefault();
+            dragDepth++;
+            setActive(true);
+        });
+        userSection.addEventListener('dragover', (e) => {
+            // Ignore internal user-queue reorder drags — those are
+            // handled by the individual items.
+            if (dragState.source === 'user-queue') return;
+
+            const hasTrackData =
+                e.dataTransfer?.types.includes('application/x-audos-context-to-user') ||
+                e.dataTransfer?.types.includes('text/plain');
+            if (!hasTrackData) return;
+
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+
+            // Only paint the end-line when the cursor is below the last
+            // item — otherwise the item handler will manage the indicator.
+            const items = userSection.querySelectorAll('.q-item');
+            if (items.length === 0) return;
+
+            const last = items[items.length - 1] as HTMLElement;
+            const lastRect = last.getBoundingClientRect();
+            if (e.clientY > lastRect.bottom) {
+                clearAllDropIndicators();
+                last.classList.add('q-item--drop-below');
+            }
+        });
+        userSection.addEventListener('dragleave', () => {
+            dragDepth--;
+            if (dragDepth <= 0) {
+                dragDepth = 0;
+                setActive(false);
+                clearAllDropIndicators();
+            }
+        });
+        userSection.addEventListener('drop', (e) => {
+            dragDepth = 0;
+            setActive(false);
+
+            // Ignore internal reorder drags — those go to the item's own
+            // drop handler (which fires first because it's a child).
+            if (e.dataTransfer?.types.includes('application/x-audos-queue-reorder')) return;
+            // Context-to-user drag is also internal but has its own MIME
+            const ctxRaw = e.dataTransfer?.getData('application/x-audos-context-to-user');
+            if (ctxRaw) {
+                e.preventDefault();
+                e.stopPropagation();
+                try {
+                    const dropped = JSON.parse(ctxRaw) as Track;
+                    if (dropped?.file_path_or_url) {
+                        addToQueue(dropped, false);
+                    }
+                } catch (err) {
+                    console.error('[Queue Drop] Context parse failed:', err);
+                }
+                return;
+            }
+
+            // External drop (e.g. from the main track list)
+            const raw = e.dataTransfer?.getData('text/plain');
+            if (!raw) return;
+            if (raw.includes('"queue-reorder"')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+                const dropped = JSON.parse(raw) as Track;
+                if (!dropped?.file_path_or_url) return;
+                addToQueue(dropped, false);
+            } catch (err) {
+                console.error('[Queue Drop] Parse failed:', err);
+            }
+        });
+
+        userSection.appendChild(list);
+        panel.appendChild(userSection);
+    } else {
+        // Empty placeholder for user queue
+        const emptySection = document.createElement('div');
+        emptySection.className = 'queue-section queue-section--user';
+        emptySection.innerHTML = `<div class="queue-section-title">Next in queue</div>`;
         const empty = document.createElement('div');
         empty.className = 'queue-empty';
-        empty.textContent = 'Drag songs here';
-        panel.appendChild(empty);
+        empty.textContent = 'Nothing queued up';
+        emptySection.appendChild(empty);
+
+        let dragDepth = 0;
+        const setActive = (on: boolean) => emptySection.classList.toggle('drag-over', on);
+        emptySection.addEventListener('dragenter', (e) => {
+            if (!e.dataTransfer?.types.includes('text/plain')) return;
+            e.preventDefault(); dragDepth++; setActive(true);
+        });
+        emptySection.addEventListener('dragover', (e) => {
+            if (!e.dataTransfer?.types.includes('text/plain')) return;
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+        });
+        emptySection.addEventListener('dragleave', () => {
+            dragDepth--; if (dragDepth <= 0) { dragDepth = 0; setActive(false); }
+        });
+        emptySection.addEventListener('drop', (e) => {
+            dragDepth = 0; setActive(false);
+
+            if (e.dataTransfer?.types.includes('application/x-audos-queue-reorder')) return;
+
+            const ctxRaw = e.dataTransfer?.getData('application/x-audos-context-to-user');
+            if (ctxRaw) {
+                e.preventDefault(); e.stopPropagation();
+                try {
+                    const dropped = JSON.parse(ctxRaw) as Track;
+                    if (dropped?.file_path_or_url) addToQueue(dropped, false);
+                } catch (err) { console.error('[Queue Drop] Context parse failed:', err); }
+                return;
+            }
+
+            const raw = e.dataTransfer?.getData('text/plain');
+            if (!raw || raw.includes('"queue-reorder"')) return;
+            e.preventDefault(); e.stopPropagation();
+            try {
+                const dropped = JSON.parse(raw) as Track;
+                if (!dropped?.file_path_or_url) return;
+                addToQueue(dropped, false);
+            } catch (err) { console.error('[Queue Drop] Parse failed:', err); }
+        });
+
+        panel.appendChild(emptySection);
     }
 
-    const listEl = document.createElement('div');
-    listEl.id = 'queue-list';
-    listEl.setAttribute('data-swapy-container', 'true');
+    // ── Next from: <contextName> (contextQueue) ──
+    const contextUpcoming = contextIndex >= 0 ? contextQueue.slice(contextIndex + 1) : [];
+    if (contextUpcoming.length > 0) {
+        const ctxSection = document.createElement('div');
+        ctxSection.className = 'queue-section queue-section--context';
 
-    const startIndex = Math.max(0, currentIndex);
-    const upcomingTracks = queue.slice(startIndex, startIndex + 51);
-
-    upcomingTracks.forEach((track, localIdx) => {
-        const realIdx = startIndex + localIdx;
-        const isCurrent = realIdx === currentIndex;
-
-        const slot = document.createElement('div');
-        slot.setAttribute('data-swapy-slot', `slot-${localIdx}`);
-
-        const item = document.createElement('div');
-        item.className = 'q-item' + (isCurrent ? ' q-item--current' : '');
-        item.setAttribute('data-swapy-item', `item-${track.id}-${realIdx}`);
-        item.setAttribute('data-source', track.source_type);
-
-        const handle = document.createElement('div');
-        handle.className = 'q-handle';
-        handle.setAttribute('data-swapy-handle', 'true');
-        handle.innerHTML = `<svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3.5" r="1.4"/><circle cx="7" cy="3.5" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="12.5" r="1.4"/><circle cx="7" cy="12.5" r="1.4"/></svg>`;
-
-        const thumb = document.createElement('div');
-        thumb.className = 'q-thumb';
-        if (track.thumbnail) thumb.style.backgroundImage = `url('${track.thumbnail}')`;
-
-        const info = document.createElement('div');
-        info.className = 'q-info';
-        info.innerHTML = `
-            <div class="q-title">${track.title || 'Unknown'}</div>
-            <div class="q-artist">${track.artist_name || ''}</div>
+        const headerRow = document.createElement('div');
+        headerRow.className = 'queue-section-header';
+        headerRow.innerHTML = `
+            <div class="queue-section-title">Next from: ${contextName || 'Queue'}</div>
+            <div class="queue-section-count">${contextUpcoming.length}</div>
         `;
+        ctxSection.appendChild(headerRow);
 
-        info.onclick = () => playTrack(realIdx);
+        const list = document.createElement('div');
+        list.className = 'queue-list';
 
-        item.appendChild(handle);
-        item.appendChild(thumb);
-        item.appendChild(info);
-        slot.appendChild(item);
-        listEl.appendChild(slot);
+        contextUpcoming.slice(0, 50).forEach((track) => {
+            list.appendChild(buildQueueItem(track, {
+                draggable: false,
+                removable: false,
+                onClick: () => {
+                    const ci = contextQueue.indexOf(track);
+                    if (ci !== -1) {
+                        contextIndex = ci;
+                        playTrack(track);
+                        refreshQueuePanel();
+                    }
+                },
+                onContextMenu: (e) => showQueueItemContextMenu(e, track, 'context'),
+            }));
+        });
+
+        ctxSection.appendChild(list);
+        panel.appendChild(ctxSection);
+    }
+
+    // Click anywhere in peek mode to open
+    panel.addEventListener('click', (e) => {
+        const app = document.getElementById('app');
+        if (!app) return;
+        if (app.classList.contains('queue-open')) return;
+        if ((e.target as HTMLElement).closest('button')) return;
+
+        applyQueueState(true);
+        localStorage.setItem(QUEUE_OPEN_KEY, 'true');
     });
 
-    panel.appendChild(listEl);
-
-    // Drop zone (unchanged logic)
-    let dragDepth = 0;
-    const setDropActive = (active: boolean) => panel.classList.toggle('queue-drop-active', active);
-
-    panel.addEventListener('dragenter', (e: DragEvent) => {
-        e.preventDefault(); dragDepth++;
-        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-        setDropActive(true);
-    }, true);
-    panel.addEventListener('dragover', (e: DragEvent) => {
-        e.preventDefault();
-        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-    }, true);
-    panel.addEventListener('dragleave', () => {
-        dragDepth--; if (dragDepth <= 0) { dragDepth = 0; setDropActive(false); }
-    }, true);
-    panel.addEventListener('drop', (e: DragEvent) => {
-        dragDepth = 0; setDropActive(false);
-        const raw = e.dataTransfer?.getData('text/plain');
-        if (!raw || raw.includes('queue-reorder')) return;
-        e.preventDefault(); e.stopPropagation();
-        try {
-            const dropped = JSON.parse(raw) as Track;
-            if (!dropped?.file_path_or_url) return;
-            const insertPosition = currentIndex >= 0 ? currentIndex + 1 : queue.length;
-            queue.splice(insertPosition, 0, dropped);
-            originalQueue.push(dropped);
-            refreshQueuePanel();
-        } catch (err) { console.error('[Queue Drop] Parse failed:', err); }
-    }, true);
-
     document.getElementById('app')!.appendChild(panel);
+}
 
-    if (upcomingTracks.length > 0) {
-        const swapy = createSwapy(listEl, { animation: 'dynamic' });
-        swapy.onSwapEnd(() => {
-            const nodes = listEl.querySelectorAll('[data-swapy-item]');
-            const currentPlayingTrack = queue[currentIndex];
-            const newlySortedSlice: Track[] = [];
-            nodes.forEach((node) => {
-                const originalRealIdx = parseInt(node.getAttribute('data-swapy-item')!.split('-').pop()!);
-                const t = queue[originalRealIdx];
-                if (t) newlySortedSlice.push(t);
+// ── Build a single queue row ──
+interface QueueItemOpts {
+    draggable: boolean;
+    removable: boolean;
+    index?: number;
+    onClick: () => void;
+    onRemove?: () => void;
+    onContextMenu?: (e: MouseEvent) => void;
+}
+
+function buildQueueItem(track: Track, opts: QueueItemOpts): HTMLElement {
+    const item = document.createElement('div');
+    item.className = 'q-item';
+    if (opts.draggable) item.classList.add('q-item--draggable');
+    else item.classList.add('q-item--context');
+    item.setAttribute('data-source', track.source_type);
+
+    // Drag handle (or spacer for alignment)
+    if (opts.draggable) {
+        const handle = document.createElement('div');
+        handle.className = 'q-handle';
+        handle.innerHTML = `<svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3.5" r="1.4"/><circle cx="7" cy="3.5" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="12.5" r="1.4"/><circle cx="7" cy="12.5" r="1.4"/></svg>`;
+        item.appendChild(handle);
+
+        // Native HTML5 drag
+        item.draggable = true;
+        item.addEventListener('dragstart', (e) => {
+            if (!e.dataTransfer) return;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('application/x-audos-queue-reorder', String(opts.index));
+            e.dataTransfer.setData('text/plain', JSON.stringify({ 'queue-reorder': true, index: opts.index }));
+            item.classList.add('q-item--dragging');
+            dragState.draggingIndex = opts.index ?? -1;
+            dragState.draggingTrack = track;
+            dragState.source = 'user-queue';
+        });
+        item.addEventListener('dragend', () => {
+            item.classList.remove('q-item--dragging');
+            clearAllDropIndicators();
+            dragState.draggingIndex = -1;
+            dragState.draggingTrack = null;
+            dragState.source = null;
+        });
+
+        // Drop indicators — top half vs bottom half of the item
+        item.addEventListener('dragover', (e) => {
+            // React to any drag that carries a track: internal user-queue
+            // reorders, context→user drops, and external drops from the
+            // main track list.
+            const src = dragState.source;
+            if (src !== 'user-queue' && src !== 'context-queue' && src !== 'external') {
+                // Fallback: some browsers won't have fired our global
+                // dragstart yet — sniff the MIME types instead.
+                const types = e.dataTransfer?.types ?? [];
+                const hasTrack =
+                    types.includes('application/x-audos-queue-reorder') ||
+                    types.includes('application/x-audos-context-to-user') ||
+                    types.includes('text/plain');
+                if (!hasTrack) return;
+            }
+
+            e.preventDefault();
+            if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = src === 'user-queue' ? 'move' : 'copy';
+            }
+
+            const rect = item.getBoundingClientRect();
+            const isTopHalf = (e.clientY - rect.top) < rect.height / 2;
+
+            clearAllDropIndicators();
+            if (isTopHalf) item.classList.add('q-item--drop-above');
+            else item.classList.add('q-item--drop-below');
+        });
+        item.addEventListener('dragleave', (e) => {
+            // Only clear if we've really left the item
+            if (!item.contains(e.relatedTarget as Node)) {
+                item.classList.remove('q-item--drop-above', 'q-item--drop-below');
+            }
+        });
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const rect = item.getBoundingClientRect();
+            const isTopHalf = (e.clientY - rect.top) < rect.height / 2;
+            const dropIndex = (opts.index ?? 0) + (isTopHalf ? 0 : 1);
+
+            // ── Internal reorder ──
+            if (dragState.source === 'user-queue') {
+                const from = dragState.draggingIndex;
+                clearAllDropIndicators();
+                if (from === -1) return;
+
+                let to = dropIndex;
+                if (from === to || from === to - 1) return;
+
+                const [moved] = userQueue.splice(from, 1);
+                if (from < to) to -= 1;
+                userQueue.splice(to, 0, moved);
+                refreshQueuePanel();
+                return;
+            }
+
+            // ── Context drag → insert into user queue ──
+            if (dragState.source === 'context-queue') {
+                const track = dragState.draggingTrack as Track | null;
+                clearAllDropIndicators();
+                if (!track) return;
+                userQueue.splice(dropIndex, 0, track);
+                refreshQueuePanel();
+                return;
+            }
+
+            // ── External drag (main track list, playlist item, etc.) ──
+            const raw = e.dataTransfer?.getData('text/plain');
+            clearAllDropIndicators();
+            if (!raw) return;
+            try {
+                const dropped = JSON.parse(raw) as Track;
+                if (!dropped?.file_path_or_url) return;
+                userQueue.splice(dropIndex, 0, dropped);
+                refreshQueuePanel();
+            } catch (err) {
+                console.error('[Queue Drop] External parse failed:', err);
+            }
+        });
+    } else {
+        // Context / now-playing rows don't have a handle, so we skip the
+        // spacer entirely — the thumb sits flush against the left edge
+        // of the row, matching Spotify's layout.
+
+        // Context items are draggable into the user-queue section.
+        // Note: only when they have an onContextMenu set — that's our
+        // signal that this is a context-queue item (not the "now playing"
+        // display row, which should stay inert).
+        if (opts.onContextMenu) {
+            item.draggable = true;
+            item.classList.add('q-item--draggable-context');
+            item.addEventListener('dragstart', (e) => {
+                if (!e.dataTransfer) return;
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData(
+                    'application/x-audos-context-to-user',
+                    JSON.stringify(track)
+                );
+                e.dataTransfer.setData('text/plain', JSON.stringify(track));
+                item.classList.add('q-item--dragging');
+                dragState.draggingTrack = track;
+                dragState.source = 'context-queue';
             });
-            queue.splice(startIndex, newlySortedSlice.length, ...newlySortedSlice);
-            if (shuffleMode === 0) originalQueue = [...queue];
-            if (currentPlayingTrack) currentIndex = queue.findIndex(t => t === currentPlayingTrack);
-            refreshQueuePanel();
+            item.addEventListener('dragend', () => {
+                item.classList.remove('q-item--dragging');
+                clearAllDropIndicators();
+                dragState.draggingTrack = null;
+                dragState.source = null;
+            });
+        }
+    }
+
+    // Thumb
+    const thumb = document.createElement('div');
+    thumb.className = 'q-thumb';
+    if (track.thumbnail) thumb.style.backgroundImage = `url('${track.thumbnail}')`;
+    item.appendChild(thumb);
+
+    // Info
+    const info = document.createElement('div');
+    info.className = 'q-info';
+    info.innerHTML = `
+        <div class="q-title">${escapeHtml(track.title || 'Unknown')}</div>
+        <div class="q-artist">${escapeHtml(track.artist_name || '')}</div>
+    `;
+    item.appendChild(info);
+
+    // Click anywhere on the row (except interactive controls) triggers
+    // the primary action.
+    item.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('.q-remove-btn')) return;
+        if (target.closest('.q-handle')) return;
+        opts.onClick();
+    });
+
+    // Remove button
+    if (opts.removable) {
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'q-remove-btn';
+        removeBtn.innerHTML = '×';
+        removeBtn.title = 'Remove from queue';
+        removeBtn.onclick = (e) => {
+            e.stopPropagation();
+            opts.onRemove?.();
+        };
+        item.appendChild(removeBtn);
+    }
+
+    // Right-click context menu
+    if (opts.onContextMenu) {
+        item.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            opts.onContextMenu!(e);
         });
     }
+
+    return item;
+}
+
+// ── Right-click menu on queue items ──
+function showQueueItemContextMenu(
+    e: MouseEvent,
+    track: Track,
+    source: 'user' | 'context'
+) {
+    document.getElementById('queue-item-menu')?.remove();
+
+    const menu = document.createElement('div');
+    menu.id = 'queue-item-menu';
+    menu.className = 'context-menu';
+    menu.style.left = `${e.clientX}px`;
+    menu.style.top = `${e.clientY}px`;
+
+    const makeRow = (label: string, action: () => void, danger = false) => {
+        const row = document.createElement('div');
+        row.className = 'context-menu-row' + (danger ? ' context-menu-row--danger' : '');
+        row.textContent = label;
+        row.onclick = () => { action(); menu.remove(); };
+        menu.appendChild(row);
+    };
+
+    if (source === 'user') {
+        makeRow('Play Now', () => {
+            const idx = userQueue.indexOf(track);
+            if (idx !== -1) userQueue.splice(idx, 1);
+            playTrack(track);
+            refreshQueuePanel();
+        });
+        makeRow('Play Next', () => {
+            const idx = userQueue.indexOf(track);
+            if (idx !== -1) userQueue.splice(idx, 1);
+            userQueue.unshift(track);
+            refreshQueuePanel();
+        });
+        makeRow('Move to End', () => {
+            const idx = userQueue.indexOf(track);
+            if (idx !== -1) userQueue.splice(idx, 1);
+            userQueue.push(track);
+            refreshQueuePanel();
+        });
+        makeRow('Remove from Queue', () => {
+            removeFromUserQueue(track);
+        }, true);
+    } else {
+        makeRow('Play Next', () => addToQueue(track, true));
+        makeRow('Add to Queue', () => addToQueue(track, false));
+    }
+
+    document.body.appendChild(menu);
+
+    const closeMenu = (ev: MouseEvent) => {
+        if (!menu.contains(ev.target as Node)) {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
 }
 
 function refreshQueuePanel() {
     const app = document.getElementById('app');
     if (!app) return;
 
-    // Only refresh if the queue is currently open
-    if (!app.classList.contains('queue-open')) return;
-
     const panel = document.getElementById('queue-panel');
     if (panel) panel.remove();
+    renderQueuePanel();
+}
+
+// ── Queue toggle (mirrors sidebar behavior) ──
+// The panel is always in the DOM. We just toggle `queue-open`, which
+// collapses the column to peek width or expands to full width.
+function applyQueueState(open: boolean) {
+    const app = document.getElementById('app');
+    if (!app) return;
+
+    app.classList.toggle('queue-open', open);
+    queueBtn?.classList.toggle('active', open);
+
+    // Always re-render — the peek content and full panel need to reflect
+    // the current state (which section the user sees depends on CSS).
     renderQueuePanel();
 }
 
@@ -2566,32 +3234,16 @@ if (queueBtn) {
         const app = document.getElementById('app');
         if (!app) return;
 
-        const isOpen = app.classList.contains('queue-open');
-
-        if (isOpen) {
-            // Close: remove class first (triggers grid collapse + panel fade out)
-            app.classList.remove('queue-open');
-            queueBtn.classList.remove('active');
-
-            // Remove the panel after the transition finishes
-            setTimeout(() => {
-                const panel = document.getElementById('queue-panel');
-                if (panel && !app.classList.contains('queue-open')) {
-                    panel.remove();
-                }
-            }, 320);
-        } else {
-            // Open: create panel (or recreate if it was destroyed), then add class
-            let panel = document.getElementById('queue-panel');
-            if (!panel) {
-                renderQueuePanel();
-            }
-            // Force a layout read so the transition triggers
-            void app.offsetWidth;
-            app.classList.add('queue-open');
-            queueBtn.classList.add('active');
-        }
+        const willOpen = !app.classList.contains('queue-open');
+        applyQueueState(willOpen);
+        localStorage.setItem(QUEUE_OPEN_KEY, String(willOpen));
     });
+}
+
+// Restore queue state on boot
+const savedQueueOpen = localStorage.getItem(QUEUE_OPEN_KEY) === 'true';
+if (savedQueueOpen) {
+    requestAnimationFrame(() => applyQueueState(true));
 }
 
 // ==========================================
@@ -2627,25 +3279,18 @@ audio.addEventListener('timeupdate', () => {
 });
 
 audio.addEventListener('ended', () => {
-    const track = currentIndex >= 0 ? queue[currentIndex] : null;
+    const track = currentTrack;
 
-    // Local files always auto-advance on a real `ended` — there's no
-    // network to have interrupted them.
     if (!track || track.source_type !== 'youtube_stream') {
         goNextTrack(false);
         return;
     }
 
-    // If the current track was interrupted (network error, offline pause,
-    // or stream truncation), do NOT auto-advance — the user should
-    // resume the same track when connectivity returns.
     if (currentTrackInterrupted) {
         console.warn('[play] ended fired on interrupted track — not advancing');
         return;
     }
 
-    // Second safety net: if we ended well short of the expected duration,
-    // the stream was truncated. Don't advance.
     if (track.duration && track.duration > 0) {
         const played = audio.currentTime || 0;
         const expected = track.duration;
@@ -2934,8 +3579,8 @@ function updateLikeButton(track: Track) {
 
 if (likeBtn) {
     likeBtn.addEventListener('click', () => {
-        if (currentIndex === -1 || queue.length === 0) return;
-        const track = queue[currentIndex];
+        if (!currentTrack) return;
+        const track = currentTrack;
         let liked: Track[] = JSON.parse(localStorage.getItem('liked_tracks_full') || '[]');
 
         const existingIndex = liked.findIndex(t => t.file_path_or_url === track.file_path_or_url);
@@ -3422,6 +4067,8 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     await fetchAndRenderTracks();
+    // Render the queue panel once so peek has content
+    renderQueuePanel();
 })();
     setupKeybindings();
 });

@@ -130,6 +130,7 @@
   --sidebar-width:           320px;
   --sidebar-collapsed:       72px;
   --queue-width:             300px;
+  --queue-peek-width:        60px;
   --header-height:           56px;
   --player-height:           96px;
   --player-inset:            0px;
@@ -320,7 +321,7 @@ img, svg { -webkit-user-drag: none; user-select: none; }
   height: 100%;
   gap: var(--gap);
   grid-template-rows: var(--header-height) 1fr;
-  grid-template-columns: var(--sidebar-width) 1fr 0px;
+  grid-template-columns: var(--sidebar-width) 1fr var(--queue-peek-width);
   grid-template-areas:
     "header  header  header"
     "sidebar main    queue";
@@ -332,7 +333,7 @@ img, svg { -webkit-user-drag: none; user-select: none; }
 }
 
 #app.sidebar-collapsed {
-  grid-template-columns: var(--sidebar-collapsed) 1fr 0px;
+  grid-template-columns: var(--sidebar-collapsed) 1fr var(--queue-peek-width);
 }
 
 #app.sidebar-collapsed.queue-open {
@@ -980,23 +981,50 @@ img, svg { -webkit-user-drag: none; user-select: none; }
   right: auto !important;
   border-radius: var(--panel-radius) !important;
   border: var(--panel-border-width) var(--panel-border-style) var(--line) !important;
-  will-change: transform, opacity;
   background: var(--panel);
-  overflow-y: auto;
-  padding: var(--queue-panel-padding);
+  overflow: hidden;             /* peek mode clips content */
+  padding: 24px 20px;
   min-width: 0;
   color: var(--text);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(16px);
-  transition: opacity 200ms var(--ease),
-              transform var(--dur-slow) var(--ease);
+  transition: padding var(--dur-slow) var(--ease);
+  cursor: pointer;              /* whole peek panel is clickable */
+  user-select: none;
 }
 
 #app.queue-open #queue-panel {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(0);
+  overflow-y: auto;
+  cursor: default;
+  user-select: auto;
+}
+
+/* ── Peek state (queue column narrow, panel shows a minimal strip) ── */
+#app:not(.queue-open) #queue-panel {
+  padding: 16px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  overflow: hidden;
+}
+
+/* Hide everything except the peek strip */
+#app:not(.queue-open) #queue-panel > *:not(.queue-peek) {
+  display: none !important;
+}
+
+/* Peek strip itself */
+#app:not(.queue-open) .queue-peek {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+/* Hide peek when queue is open */
+#app.queue-open #queue-panel > .queue-peek {
+  display: none !important;
 }
 
 #queue-panel h3 {
@@ -1007,86 +1035,427 @@ img, svg { -webkit-user-drag: none; user-select: none; }
 }
 
 .queue-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 16px; gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  gap: 8px;
 }
-.queue-header h3 { font-size: 18px; font-weight: bold; flex-grow: 1; }
-.queue-count { font-size: 12px; color: var(--text-faint); white-space: nowrap; }
+.queue-header h3 {
+  font-family: var(--font-body);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  flex-grow: 1;
+}
+.queue-count {
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
 .queue-clear-btn {
   background: transparent;
-  border: 1px solid var(--line);
-  color: var(--text-dim);
-  padding: 4px 10px;
-  border-radius: var(--radius);
+  border: none;
+  color: var(--text-faint);
+  padding: 0;
   cursor: pointer;
   font-size: 12px;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
+  font-weight: 500;
+  text-decoration: none;
+  transition: color var(--dur) var(--ease);
 }
+.queue-clear-btn:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.queue-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.queue-collapse-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background var(--dur) var(--ease),
+              color var(--dur) var(--ease);
+}
+
+.queue-collapse-btn:hover {
+  background: var(--panel-strong);
+  color: var(--text);
+}
+
+.queue-collapse-btn svg {
+  transform: rotate(180deg);   /* chevron points right, indicating "close to the right" */
+}
+
 .queue-empty {
   color: var(--text-faint);
   text-align: center;
-  padding: 40px 16px;
+  padding: 32px 16px;
   border: 2px dashed var(--line-strong);
-  border-radius: var(--radius);
-  margin-top: 16px;
+  border-radius: var(--radius-md);
+  margin-top: 4px;
   font-family: var(--font-mono);
   font-size: 12px;
 }
-#queue-list { display: flex; flex-direction: column; gap: 4px; }
 
-.q-item {
-  display: flex; align-items: center; gap: var(--q-item-gap);
-  padding: var(--q-item-padding);
-  border-radius: var(--q-item-radius);
-  cursor: pointer;
-  background: var(--paper);
-  border-left: var(--q-item-border-left-width) solid transparent;
-  transition: background var(--dur) var(--ease);
-  user-select: none;
+/* ── Sections ── */
+.queue-section {
+  margin-bottom: 32px;
 }
-.q-item--current {
+.queue-section:last-child {
+  margin-bottom: 8px;
+}
+
+.queue-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.queue-section-title {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  flex-grow: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.queue-section-count {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+/* Now-playing: subtler — smaller header, prominent row */
+.queue-section--now .queue-section-title {
+  font-size: 14px;
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+.queue-section--now .q-item {
   background: var(--queue-current-bg);
   border-left-color: var(--accent);
 }
-.q-item:hover { background: var(--panel-strong); }
-.q-item--current:hover { background: var(--queue-current-bg); }
-.q-handle {
-  flex-shrink: 0;
-  display: flex; align-items: center;
-  padding: 4px;
-  opacity: 0.5;
+.queue-section--now .q-title {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ── Queue list ── */
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.q-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  background: transparent;
+  border-left: 3px solid transparent;
+  transition: background var(--dur) var(--ease),
+              opacity var(--dur) var(--ease);
+  user-select: none;
+  position: relative;
+}
+.q-item:hover {
+  background: var(--panel-strong);
+}
+
+/* Read-only context items — clickable, and draggable into the user queue */
+.q-item--context {
+  cursor: pointer;
+}
+.q-item--draggable-context {
   cursor: grab;
 }
+.q-item--draggable-context:active {
+  cursor: grabbing;
+}
+
+/* Draggable user-queue items */
+.q-item--draggable {
+  cursor: grab;
+}
+.q-item--draggable:active {
+  cursor: grabbing;
+}
+
+/* Drag state — the item being dragged fades slightly */
+.q-item--dragging {
+  opacity: 0.35;
+}
+
+/* Drop indicator — accent line between items */
+.q-item--drop-above::before,
+.q-item--drop-below::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  box-shadow: 0 0 6px var(--accent);
+  pointer-events: none;
+}
+.q-item--drop-above::before {
+  top: -4px;
+}
+.q-item--drop-below::after {
+  bottom: -4px;
+}
+
+/* Handle shown on user-queue items */
+.q-handle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 4px 2px;
+  opacity: 0.35;
+  cursor: grab;
+  color: var(--text-faint);
+}
+.q-item--draggable:hover .q-handle {
+  opacity: 0.8;
+}
+
+/* (spacer removed — context items align flush-left) */
+
 .q-thumb {
-  width: var(--q-thumb-size);
-  height: var(--q-thumb-size);
-  border-radius: var(--radius);
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
   background-size: cover;
   background-position: center;
   background-color: var(--panel-strong);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
-.q-info { flex-grow: 1; overflow: hidden; min-width: 0; }
+
+.q-info {
+  flex-grow: 1;
+  overflow: hidden;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
 .q-title {
-  font-size: 13px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
   color: var(--text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.q-item--current .q-title { font-weight: bold; color: var(--accent); }
 .q-artist {
-  font-size: 11px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
   color: var(--text-faint);
-  font-family: var(--font-mono);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-#queue-panel [data-swapy-item] { cursor: pointer; }
-#queue-panel [data-swapy-handle] { cursor: grab; }
-#queue-panel [data-swapy-handle]:active { cursor: grabbing; }
+/* Remove button — only shown on user-queue items on hover */
+.q-remove-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease),
+              background var(--dur) var(--ease),
+              color var(--dur) var(--ease);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+}
+.q-item--draggable:hover .q-remove-btn {
+  opacity: 0.5;
+}
+.q-remove-btn:hover {
+  opacity: 1 !important;
+  background: var(--line-strong);
+  color: var(--text);
+}
 
-#queue-panel.queue-drop-active {
-  border-left: 3px solid var(--accent);
+/* Drop-zone highlight when dragging over the user-queue section */
+.queue-section--user.drag-over {
   background: var(--accent-bg-faint);
+  border-radius: var(--radius-md);
+  outline: 1px dashed var(--accent);
+  outline-offset: 6px;
+}
+
+/* ── Queue peek strip ── */
+.queue-peek {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Vertical mini-stack of album art */
+.queue-peek-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.queue-peek-cell {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-sm);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: var(--panel-strong);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity var(--dur) var(--ease),
+              transform var(--dur) var(--ease);
+}
+
+.queue-peek-cell img {
+  width: 18px;
+  height: 18px;
+  filter: var(--icon-filter);
+  opacity: 0.55;
+}
+
+/* Current track — visually emphasized */
+.queue-peek-cell--current {
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
+  box-shadow: 0 0 0 2px var(--accent), 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* Subsequent cells fade out slightly so the current one dominates */
+.queue-peek-cell:not(.queue-peek-cell--current) {
+  opacity: 0.6;
+}
+
+.queue-peek-cell--empty {
+  opacity: 0.4;
+}
+
+/* Footer with badge + expand button */
+.queue-peek-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 4px;
+  flex-shrink: 0;
+}
+
+.queue-peek-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  background: var(--text);
+  color: var(--bg);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.queue-peek-expand {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--text);
+  border: none;
+  color: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: background var(--dur) var(--ease),
+              color var(--dur) var(--ease),
+              transform var(--dur-slow) var(--ease);
+}
+
+.queue-peek-expand:hover {
+  background: var(--accent);
+  color: #fff;
+  transform: scale(1.08);
+}
+
+.queue-peek-expand:active {
+  transform: scale(0.94);
+}
+
+.queue-peek-expand svg {
+  transition: transform var(--dur-slow) var(--ease);
+  transform: rotate(0deg);
+}
+
+/* When queue is open, the button rotates 180° — but the button
+   lives inside .queue-peek which is hidden when open. So we put
+   the toggle button in the panel header instead. See Fix 3. */
+
+/* Hover state on peek — subtle hint that it's clickable */
+#app:not(.queue-open) #queue-panel:hover {
+  background: var(--panel-strong);
 }
 
 /* ── Player card ──────────────────────────────────────────── */
@@ -1095,7 +1464,7 @@ img, svg { -webkit-user-drag: none; user-select: none; }
   position: fixed;
   bottom: var(--player-bottom-offset);
   left: calc(var(--gap) + var(--sidebar-width) + var(--gap));
-  right: var(--gap);
+  /* right: set below — depends on queue state */
   height: var(--player-height);
   z-index: 200;
   margin: 0 var(--player-inset);
@@ -1119,12 +1488,18 @@ body:has(#app.sidebar-collapsed) #player-bar {
   left: calc(var(--gap) + var(--sidebar-collapsed) + var(--gap));
 }
 
-/* When queue is open, player bar stops before it */
+/* Player bar always stops before the queue column. Narrow when peeked,
+   wider when open — the width comes from a CSS variable set below. */
+#player-bar {
+  right: calc(var(--gap) + var(--queue-peek-width) + var(--gap));
+}
 body:has(#app.queue-open) #player-bar {
   right: calc(var(--gap) + var(--queue-width) + var(--gap));
 }
 
-/* Both states at once */
+body:has(#app.sidebar-collapsed) #player-bar {
+  left: calc(var(--gap) + var(--sidebar-collapsed) + var(--gap));
+}
 body:has(#app.sidebar-collapsed):has(#app.queue-open) #player-bar {
   left: calc(var(--gap) + var(--sidebar-collapsed) + var(--gap));
   right: calc(var(--gap) + var(--queue-width) + var(--gap));
@@ -1825,7 +2200,7 @@ body.is-dragging #main-view { background: var(--panel-strong); }
 ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
 ::-webkit-scrollbar-thumb {
   background-color: var(--scrollbar-thumb);
-  border: 3px solid var(--scrollbar-border);
+  border: 1px solid var(--scrollbar-border);
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover { background-color: var(--scrollbar-thumb-hover); }
