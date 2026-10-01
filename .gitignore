@@ -32,3 +32,4 @@ src-tauri/gen/schemas/
 #
 RELEASING.md
 documentation.txt
+scripts/
