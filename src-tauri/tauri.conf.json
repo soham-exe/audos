@@ -14,6 +14,7 @@
                 "windows":  [
                                 {
                                     "title":  "Audos",
+                                    "maximized": true,
                                     "width":  900,
                                     "height":  600,
                                     "minWidth":  800,

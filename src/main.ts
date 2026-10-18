@@ -2317,6 +2317,16 @@ async function playTrack(track: Track) {
     updateLikeButton(track);
     refreshQueuePanel();
     maybeExtendQueue();
+
+    // Wire vinyl mode (idempotent — only attaches once)
+    if (!albumArtEl.dataset.vinylWired) {
+        albumArtEl.dataset.vinylWired = '1';
+        albumArtEl.style.cursor = 'pointer';
+        albumArtEl.title = 'Vinyl mode';
+        albumArtEl.addEventListener('click', () => {
+            if (currentTrack) openVinylMode();
+        });
+    }
 }
 // ==========================================
 // Context auto-extension (radio mode)
@@ -2581,7 +2591,6 @@ if (prevBtn) {
 // ==========================================
 // Queue Panel
 // ==========================================
-const queueBtn = document.getElementById('btn-queue') as HTMLButtonElement;
 
 function renderQueuePanel() {
     const existing = document.getElementById('queue-panel');
@@ -3241,22 +3250,9 @@ function applyQueueState(open: boolean) {
     if (!app) return;
 
     app.classList.toggle('queue-open', open);
-    queueBtn?.classList.toggle('active', open);
+    // Removed queueBtn.classList.toggle because the button is gone
 
-    // Always re-render — the peek content and full panel need to reflect
-    // the current state (which section the user sees depends on CSS).
     renderQueuePanel();
-}
-
-if (queueBtn) {
-    queueBtn.addEventListener('click', () => {
-        const app = document.getElementById('app');
-        if (!app) return;
-
-        const willOpen = !app.classList.contains('queue-open');
-        applyQueueState(willOpen);
-        localStorage.setItem(QUEUE_OPEN_KEY, String(willOpen));
-    });
 }
 
 // Restore queue state on boot
@@ -3626,6 +3622,144 @@ if (likeBtn) {
         if (isShowingPlaylist && activePlaylistIndex >= 0 && playlists[activePlaylistIndex].folderPath === 'VIRTUAL_LIKED_SONGS') {
             displayedTracks = getPlaylistTracks(playlists[activePlaylistIndex]);
             renderTracks(displayedTracks, 'Liked Songs');
+        }
+    });
+}
+// ==========================================
+// Lyrics Button & Modal (Karaoke Style)
+// ==========================================
+interface SyncedLine {
+    time_ms: number;
+    text: string;
+}
+
+interface LyricsData {
+    plain: string;
+    synced: SyncedLine[] | null;
+    source: string;
+}
+
+let activeLyricsAnimation: number | null = null;
+
+const lyricsBtn = document.getElementById('btn-lyrics') as HTMLButtonElement;
+
+if (lyricsBtn) {
+    lyricsBtn.addEventListener('click', async () => {
+        if (!currentTrack) return;
+
+        // Clean up previous modal/animation if open
+        document.getElementById('lyrics-modal-overlay')?.remove();
+        if (activeLyricsAnimation) cancelAnimationFrame(activeLyricsAnimation);
+
+        showToast('Fetching lyrics...', 'info', 2000);
+
+        try {
+            const data = await invoke<LyricsData>('fetch_lyrics', {
+                title: currentTrack.title || '',
+                artist: currentTrack.artist_name || 'Unknown',
+                duration: currentTrack.duration || 0
+            });
+
+            showToast(`Lyrics from ${data.source}`, 'info', 1800);
+
+            const overlay = document.createElement('div');
+            overlay.id = 'lyrics-modal-overlay';
+            overlay.className = 'modal-overlay';
+            
+            // If we have synced lyrics, render the karaoke view
+            if (data.synced && data.synced.length > 0) {
+                let linesHtml = '';
+                data.synced.forEach((line, index) => {
+                    linesHtml += `<div class="lyrics-line" data-index="${index}" data-time="${line.time_ms}">${escapeHtml(line.text)}</div>`;
+                });
+
+                overlay.innerHTML = `
+                    <div class="modal-card lyrics-modal">
+                        <div class="lyrics-header">
+                            <div>
+                                <h3>${escapeHtml(currentTrack.title || '')}</h3>
+                                <p>${escapeHtml(currentTrack.artist_name || '')}</p>
+                            </div>
+                            <button class="modal-btn modal-btn--primary close-lyrics">Close</button>
+                        </div>
+                        <div class="lyrics-content lyrics-content--synced" id="lyrics-scroll-container">
+                            ${linesHtml}
+                        </div>
+                    </div>
+                `;
+
+                document.body.appendChild(overlay);
+
+                const scrollContainer = document.getElementById('lyrics-scroll-container') as HTMLElement;
+                const lineElements = Array.from(
+                    scrollContainer.querySelectorAll<HTMLElement>('.lyrics-line')
+                );
+
+                // Karaoke Sync Loop
+                const syncLyrics = () => {
+                    if (!document.body.contains(overlay)) return; // Stop if closed
+                    
+                    const currentTimeMs = audio.currentTime * 1000;
+                    let activeIndex = -1;
+
+                    // Find the current line
+                    for (let i = 0; i < data.synced!.length; i++) {
+                        if (currentTimeMs >= data.synced![i].time_ms) {
+                            activeIndex = i;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // Update UI
+                    lineElements.forEach((el, i) => {
+                        if (i === activeIndex) {
+                            if (!el.classList.contains('active')) {
+                                el.classList.add('active');
+                                // Scroll to the middle of the container
+                                const offset = el.offsetTop - (scrollContainer.clientHeight / 2) + (el.clientHeight / 2);
+                                scrollContainer.scrollTo({ top: offset, behavior: 'smooth' });
+                            }
+                        } else {
+                            el.classList.remove('active');
+                        }
+                    });
+
+                    activeLyricsAnimation = requestAnimationFrame(syncLyrics);
+                };
+
+                // Start loop
+                syncLyrics();
+
+            } else {
+                // Fallback: Plain text
+                overlay.innerHTML = `
+                    <div class="modal-card lyrics-modal">
+                        <div class="lyrics-header">
+                            <div>
+                                <h3>${escapeHtml(currentTrack.title || '')}</h3>
+                                <p>${escapeHtml(currentTrack.artist_name || '')}</p>
+                            </div>
+                            <button class="modal-btn modal-btn--primary close-lyrics">Close</button>
+                        </div>
+                        <div class="lyrics-content">${escapeHtml(data.plain).replace(/\n/g, '<br>')}</div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+            }
+            
+            // Close logic
+            const close = () => {
+                overlay.remove();
+                if (activeLyricsAnimation) cancelAnimationFrame(activeLyricsAnimation);
+            };
+            overlay.querySelector('.close-lyrics')?.addEventListener('click', close);
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) close();
+            });
+
+        } catch (e) {
+            showToast(`Lyrics error: ${e}`, 'error', 5000);
         }
     });
 }
@@ -4091,3 +4225,267 @@ window.addEventListener('DOMContentLoaded', () => {
 })();
     setupKeybindings();
 });
+
+// ==========================================
+// Vinyl Mode (idle fullscreen player)
+// ==========================================
+let vinylAnimationFrame: number | null = null;
+
+// Tonearm angles in degrees (CSS rotate, clockwise-positive, 0 = pointing straight down).
+// These match the deck geometry in vinyl-mode.css (pivot 88%/12%, arm 37% long, record
+// centred at 50%/50% with radius 38%), so the stylus lands on the groove at every angle.
+const ARM_REST = -10;  // parked just off the record's right edge
+const ARM_OUTER = 7;   // stylus on the outer groove (start of the song)
+const ARM_INNER = 45;  // stylus near the label (end of the song)
+const RECORD_DEG_PER_SEC = 200; // 33⅓ rpm
+
+const VINYL_TITLE_MAX = 60;
+
+// "Angel (Remastered 2019)"            -> { main: "Angel", tag: "Remastered 2019" }
+// "Song - Live at X"                   -> { main: "Song",  tag: "Live at X" }
+// "Song | Movie | Singer A & Singer B" -> { main: "Song",  tag: "Movie | Singer A & Singer B" }
+function splitVinylTitle(raw: string): { main: string; tag: string } {
+    const title = (raw || 'Unknown Title').trim();
+    let main = title;
+    let tag = '';
+
+    const pipes = title.split('|').map(p => p.trim()).filter(Boolean);
+    if (pipes.length > 1) {
+        main = pipes[0];
+        tag = pipes.slice(1).join(' | ');
+    } else {
+        const paren = title.match(/^(.+?)\s*[\(\[]([^\)\]]+)[\)\]]\s*$/);
+        const dash = title.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+        if (paren) { main = paren[1].trim(); tag = paren[2].trim(); }
+        else if (dash) { main = dash[1].trim(); tag = dash[2].trim(); }
+    }
+
+    if (main.length > VINYL_TITLE_MAX) main = main.slice(0, VINYL_TITLE_MAX - 1).trimEnd() + '…';
+    return { main, tag };
+}
+
+function openVinylMode() {
+    if (!currentTrack) return;
+    document.getElementById('vinyl-overlay')?.remove();
+    if (vinylAnimationFrame) cancelAnimationFrame(vinylAnimationFrame);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'vinyl-overlay';
+    overlay.className = 'vinyl-overlay';
+
+    overlay.innerHTML = `
+        <div class="vinyl-bg" id="vinyl-bg"></div>
+        <button class="vinyl-close" title="Close" aria-label="Close">×</button>
+        <div class="vinyl-stage">
+
+            <!-- Left: Deck -->
+            <div class="vinyl-deck-container">
+                <div class="vinyl-deck">
+                    <div class="vinyl-platter-ring"></div>
+
+                    <button class="vinyl-deck-btn" id="vinyl-deck-play" title="Play/Pause">
+                        <span>Start / Stop</span>
+                    </button>
+
+                    <!-- Record -->
+                    <div class="vinyl-platter">
+                        <div class="vinyl-record" id="vinyl-record">
+                            <div class="vinyl-grooves"></div>
+                            <div class="vinyl-label" id="vinyl-label"></div>
+                            <div class="vinyl-hole"></div>
+                        </div>
+                        <div class="vinyl-sheen"></div>
+                    </div>
+
+                    <!-- Tonearm (anchored on its pivot) -->
+                    <div class="vinyl-tonearm" id="vinyl-tonearm">
+                        <div class="tonearm-counter"></div>
+                        <div class="tonearm-shaft"></div>
+                        <div class="tonearm-base"></div>
+                        <div class="tonearm-head"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Typography & Controls -->
+            <div class="vinyl-sidebar">
+                <div class="vinyl-meta">
+                    <h1 class="vinyl-title" id="vinyl-title"></h1>
+                    <span class="vinyl-tag" id="vinyl-tag" hidden></span>
+                    <p class="vinyl-artist" id="vinyl-artist"></p>
+                </div>
+
+                <div class="vinyl-controls">
+                    <button class="vinyl-ctrl" id="vinyl-prev" title="Previous" aria-label="Previous track">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                    </button>
+                    <button class="vinyl-ctrl vinyl-ctrl--play" id="vinyl-play" title="Play/Pause" aria-label="Play or pause">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" id="vinyl-play-icon"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                    </button>
+                    <button class="vinyl-ctrl" id="vinyl-next" title="Next" aria-label="Next track">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                    </button>
+                </div>
+
+                <div class="vinyl-progress">
+                    <div class="vinyl-progress-info">
+                        <span id="vinyl-time-current">0:00</span>
+                        <span id="vinyl-time-total">0:00</span>
+                    </div>
+                    <div class="vinyl-progress-bg" id="vinyl-progress-bg">
+                        <div class="vinyl-progress-fill" id="vinyl-progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // ── Elements ──
+    const bgEl = document.getElementById('vinyl-bg')!;
+    const titleEl = document.getElementById('vinyl-title')!;
+    const tagEl = document.getElementById('vinyl-tag')!;
+    const artistEl = document.getElementById('vinyl-artist')!;
+    const labelEl = document.getElementById('vinyl-label')!;
+    const recordEl = document.getElementById('vinyl-record')!;
+    const tonearmEl = document.getElementById('vinyl-tonearm')!;
+
+    const playBtn = document.getElementById('vinyl-play') as HTMLButtonElement;
+    const deckBtn = document.getElementById('vinyl-deck-play') as HTMLButtonElement;
+    const playIcon = document.getElementById('vinyl-play-icon')!;
+
+    const progressBg = document.getElementById('vinyl-progress-bg')!;
+    const progressFill = document.getElementById('vinyl-progress-fill') as HTMLElement;
+    const timeCurrent = document.getElementById('vinyl-time-current')!;
+    const timeTotal = document.getElementById('vinyl-time-total')!;
+
+    const PATH_PLAY = 'M8 5v14l11-7z';
+    const PATH_PAUSE = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
+
+    // ── Metadata: only touched when the track actually changes ──
+    let trackKey = '';
+    function syncMetadata() {
+        if (!currentTrack) return;
+        const key = `${currentTrack.title}|${currentTrack.artist_name}|${currentTrack.thumbnail}`;
+        if (key === trackKey) return;
+        trackKey = key;
+
+        const { main, tag } = splitVinylTitle(currentTrack.title || 'Unknown Title');
+        titleEl.textContent = main;
+        titleEl.title = currentTrack.title || '';
+        titleEl.classList.toggle('vinyl-title--md', main.length > 10 && main.length <= 22);
+        titleEl.classList.toggle('vinyl-title--lg', main.length > 22);
+
+        tagEl.textContent = tag;
+        tagEl.title = tag;
+        tagEl.hidden = !tag;
+
+        artistEl.textContent = currentTrack.artist_name || 'Unknown Artist';
+        artistEl.title = artistEl.textContent;
+
+        if (currentTrack.thumbnail) {
+            const url = `url("${String(currentTrack.thumbnail).replace(/"/g, '%22')}")`;
+            labelEl.style.backgroundImage = url;
+            bgEl.style.backgroundImage = url;
+            bgEl.classList.add('is-on');
+        } else {
+            labelEl.style.backgroundImage = 'none';
+            bgEl.classList.remove('is-on');
+        }
+    }
+
+    // ── Play-state UI: only touched when play state changes ──
+    let shownPlaying: boolean | null = null;
+    function syncPlayState(playing: boolean) {
+        if (playing === shownPlaying) return;
+        shownPlaying = playing;
+        playIcon.innerHTML = `<path d="${playing ? PATH_PAUSE : PATH_PLAY}"/>`;
+        deckBtn.classList.toggle('is-on', playing);
+    }
+
+    // ── Animation loop ──
+    let rotation = 0;
+    let speed = 0;            // current deg/s, eases up and down like a real platter
+    let armAngle = ARM_REST;
+    let lastTs = 0;
+
+    function frame(ts: number) {
+        if (!overlay.isConnected) return;
+        const dt = Math.min(lastTs ? (ts - lastTs) / 1000 : 0, 0.1);
+        lastTs = ts;
+
+        syncMetadata();
+        const playing = !!isPlaying;
+        syncPlayState(playing);
+
+        // Platter spins up / winds down instead of snapping
+        speed += ((playing ? RECORD_DEG_PER_SEC : 0) - speed) * Math.min(1, dt * 2.5);
+        if (speed > 0.05) {
+            rotation = (rotation + speed * dt) % 360;
+            recordEl.style.transform = `rotate(${rotation}deg)`;
+        }
+
+        // Time + progress
+        const hasDuration = audio.duration > 0 && isFinite(audio.duration);
+        const pct = hasDuration ? audio.currentTime / audio.duration : 0;
+        if (hasDuration) {
+            timeCurrent.textContent = formatTime(audio.currentTime);
+            timeTotal.textContent = formatTime(audio.duration);
+        }
+        progressFill.style.width = `${pct * 100}%`;
+
+        // Tonearm: drops onto the outer groove, then tracks inward as the song plays
+        const armTarget = playing ? ARM_OUTER - (ARM_OUTER - ARM_INNER) * pct : ARM_REST;
+        armAngle += (armTarget - armAngle) * Math.min(1, dt * 4);
+        tonearmEl.style.transform = `rotate(${armAngle.toFixed(2)}deg)`;
+
+        vinylAnimationFrame = requestAnimationFrame(frame);
+    }
+    vinylAnimationFrame = requestAnimationFrame(frame);
+
+    // ── Controls ──
+    playBtn.addEventListener('click', () => togglePlay());
+    deckBtn.addEventListener('click', () => togglePlay());
+    document.getElementById('vinyl-prev')!.addEventListener('click', () => prevBtn?.click());
+    document.getElementById('vinyl-next')!.addEventListener('click', () => nextBtn?.click());
+
+    // Click-to-seek
+    progressBg.addEventListener('click', (e) => {
+        if (!audio.duration || !isFinite(audio.duration)) return;
+        const rect = progressBg.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        audio.currentTime = pct * audio.duration;
+    });
+
+    // ── Close ──
+    const close = () => {
+        overlay.classList.add('vinyl-overlay--closing');
+        setTimeout(() => overlay.remove(), 300);
+        if (vinylAnimationFrame) cancelAnimationFrame(vinylAnimationFrame);
+        vinylAnimationFrame = null;
+        document.removeEventListener('keydown', keyHandler);
+    };
+
+    const keyHandler = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            close();
+        } else if (e.key === ' ' && !(e.target as HTMLElement)?.closest('button, input, textarea')) {
+            e.preventDefault();
+            togglePlay();
+        } else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && audio.duration > 0) {
+            audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + (e.key === 'ArrowRight' ? 5 : -5)));
+        }
+    };
+    document.addEventListener('keydown', keyHandler);
+
+    overlay.querySelector('.vinyl-close')?.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => {
+        const t = e.target as HTMLElement;
+        // Clicking empty space (not the deck or the sidebar content) closes it
+        if (t === overlay || t.classList.contains('vinyl-stage')) close();
+    });
+
+    requestAnimationFrame(() => overlay.classList.add('vinyl-overlay--visible'));
+}
