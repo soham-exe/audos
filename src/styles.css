@@ -2603,12 +2603,13 @@ body.is-dragging #main-view { background: var(--panel-strong); }
 }
 
 /* ============================================================
-   15. VINYL MODE (Brutalist / Minimalist)
-   Deck geometry is expressed as % of the deck so the record,
-   platter ring and tonearm always line up at any size.
+   15. VINYL MODE — brushed-metal turntable
+   The deck is 4:3. 1u = 1% of the deck's WIDTH, so the deck is
+   100u wide and 75u tall and everything is placed in u.
 
-   Record centre : 50% / 50%   radius 38%
-   Tonearm pivot : 88% / 12%   length 37%
+   Record centre : 38u / 37.5u   radius 28u
+   Tonearm pivot : 80u / 16u     (arm drawn in SVG, see .ts)
+   Volume fader  : x 81-89u, y 34-69u
    ============================================================ */
 
 .vinyl-overlay {
@@ -2682,7 +2683,7 @@ body.is-dragging #main-view { background: var(--panel-strong); }
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6vw;
+    gap: 5vw;
     width: 100%;
     max-width: 1400px;
     padding: 0 40px;
@@ -2694,162 +2695,130 @@ body.is-dragging #main-view { background: var(--panel-strong); }
    ============================================================ */
 
 .vinyl-deck-container {
-    --deck: min(45vw, 600px, 78vh);
+    --w: min(50vw, 720px, 96vh);
+    --u: calc(var(--w) / 100);
     position: relative;
-    width: var(--deck);
-    height: var(--deck);
+    width: var(--w);
+    height: calc(var(--u) * 75);
     flex-shrink: 0;
 }
 
+/* Dark Brushed Metal */
 .vinyl-deck {
     position: absolute;
     inset: 0;
-    border-radius: 10px;
+    border-radius: calc(var(--u) * 1.2);
     overflow: hidden;
     background:
-        repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.012) 0 2px, transparent 2px 4px),
-        linear-gradient(145deg, #f1f1f1, #d8d8d8);
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0px, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 3px),
+        linear-gradient(135deg, #1f2022 0%, #343538 25%, #1f2022 50%, #343538 75%, #1f2022 100%);
     box-shadow:
-        0 40px 90px rgba(0, 0, 0, 0.65),
-        0 0 0 1px rgba(255, 255, 255, 0.06),
-        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+        0 30px 60px rgba(0, 0, 0, 0.8),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+        inset 0 0 40px rgba(0, 0, 0, 0.6);
+    border: 1px solid #111;
 }
 
-/* Recessed platter the record sits in */
+/* Small printed labels */
+.deck-label {
+    position: absolute;
+    transform: translateX(-50%);
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: max(6px, calc(var(--u) * 1.2));
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* Soft recess the record sits in */
 .vinyl-platter-ring {
     position: absolute;
-    left: 8%;
-    top: 8%;
-    width: 84%;
-    height: 84%;
+    left: calc(var(--u) * 8.5);
+    top: calc(var(--u) * 8);
+    width: calc(var(--u) * 59);
+    height: calc(var(--u) * 59);
     border-radius: 50%;
-    background: radial-gradient(circle, #cfcfcf 0 70%, #c4c4c4 100%);
+    background: radial-gradient(circle closest-side, rgba(0, 0, 0, 0.0) 0 92%, rgba(0, 0, 0, 0.10) 100%);
     box-shadow:
-        inset 0 6px 18px rgba(0, 0, 0, 0.18),
-        inset 0 0 0 2px rgba(0, 0, 0, 0.06),
-        0 1px 0 rgba(255, 255, 255, 0.9);
+        inset 0 calc(var(--u) * 0.3) calc(var(--u) * 1.2) rgba(0, 0, 0, 0.2),
+        0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-/* Start / stop */
+/* ── Power knob (decorative: turns ON while a song plays) ── */
+.vinyl-power {
+    position: absolute;
+    left: calc(var(--u) * 9);
+    top: calc(var(--u) * 9.5);
+    width: calc(var(--u) * 5.2);
+    height: calc(var(--u) * 5.2);
+    transform: translate(-50%, -50%) rotate(-42deg);
+    transition: transform 450ms var(--ease);
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, #d6d6d6, #8a8a8a, #ececec, #7a7a7a, #d6d6d6);
+    box-shadow:
+        0 0 0 calc(var(--u) * 0.35) #9b9d9f,
+        0 0 0 calc(var(--u) * 0.6) rgba(255, 255, 255, 0.7),
+        0 calc(var(--u) * 0.6) calc(var(--u) * 1.2) rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+}
+.vinyl-power.is-on { transform: translate(-50%, -50%) rotate(42deg); }
+.vinyl-power::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 8%;
+    width: calc(var(--u) * 0.45);
+    height: 30%;
+    transform: translateX(-50%);
+    border-radius: 2px;
+    background: #2b2b2b;
+}
+
+/* ── Start / Stop (silver button, green ring when playing) ── */
 .vinyl-deck-btn {
     position: absolute;
-    bottom: 5%;
-    left: 5%;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: #fff;
-    border: 1px solid #c9c9c9;
-    border-radius: 4px;
-    padding: 10px 16px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: #222;
+    left: calc(var(--u) * 9);
+    top: calc(var(--u) * 66);
+    width: calc(var(--u) * 6.4);
+    height: calc(var(--u) * 6.4);
+    transform: translate(-50%, -50%);
+    padding: 0;
+    border: none;
+    border-radius: 50%;
     cursor: pointer;
-    box-shadow: 0 2px 0 #bdbdbd, 0 6px 12px rgba(0, 0, 0, 0.08);
-    transition: transform 120ms var(--ease), box-shadow 120ms var(--ease), background 150ms var(--ease);
+    background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--paper) 100%, white), color-mix(in srgb, var(--paper) 80%, black) 75%);
+    box-shadow:
+        0 0 0 calc(var(--u) * 0.45) color-mix(in srgb, var(--panel) 80%, black),
+        0 0 0 calc(var(--u) * 0.8) rgba(255, 255, 255, 0.5),
+        0 calc(var(--u) * 0.7) calc(var(--u) * 1.3) rgba(0, 0, 0, 0.4);
+    transition: transform 120ms var(--ease);
     z-index: 5;
 }
-.vinyl-deck-btn:hover { background: #f4f4f4; }
-.vinyl-deck-btn:active { transform: translateY(2px); box-shadow: 0 0 0 #bdbdbd, inset 0 2px 4px rgba(0, 0, 0, 0.1); }
-
-/* Power LED: lit while the record is playing */
 .vinyl-deck-btn::before {
     content: "";
-    width: 7px;
-    height: 7px;
+    position: absolute;
+    inset: 14%;
     border-radius: 50%;
-    background: #b5b5b5;
-    transition: background 300ms var(--ease), box-shadow 300ms var(--ease);
+    border: calc(var(--u) * 0.55) solid color-mix(in srgb, var(--panel) 70%, black);
+    background: radial-gradient(circle at 35% 30%, var(--paper), color-mix(in srgb, var(--paper) 80%, black));
+    transition: border-color 300ms var(--ease), box-shadow 300ms var(--ease);
 }
 .vinyl-deck-btn.is-on::before {
-    background: var(--accent, #ff3b30);
-    box-shadow: 0 0 8px var(--accent, #ff3b30);
+    border-color: var(--accent);
+    box-shadow: 0 0 calc(var(--u) * 1.6) var(--accent), inset 0 0 calc(var(--u) * 0.6) color-mix(in srgb, var(--accent) 60%, transparent);
 }
+.vinyl-deck-btn:active { transform: translate(-50%, -50%) scale(0.94); }
 
-/* ── Tonearm ──
-   Zero-size anchor sitting exactly on the pivot point. JS sets the
-   rotation each frame so the stylus rides the groove as the song plays. */
-.vinyl-tonearm {
-    position: absolute;
-    left: 88%;
-    top: 12%;
-    width: 0;
-    height: 0;
-    z-index: 4;
-    transform: rotate(-10deg);
-    will-change: transform;
-}
-
-.tonearm-base {
-    position: absolute;
-    width: calc(var(--deck) * 0.1);
-    height: calc(var(--deck) * 0.1);
-    left: calc(var(--deck) * -0.05);
-    top: calc(var(--deck) * -0.05);
-    border-radius: 50%;
-    background: radial-gradient(circle at 32% 30%, #ffffff, #b9b9b9 70%);
-    box-shadow:
-        0 6px 14px rgba(0, 0, 0, 0.3),
-        inset 0 2px 3px #fff,
-        0 0 0 calc(var(--deck) * 0.012) rgba(0, 0, 0, 0.05);
-    z-index: 3;
-}
-.tonearm-base::after {
-    content: "";
-    position: absolute;
-    inset: 32%;
-    border-radius: 50%;
-    background: #2a2a2a;
-    box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.25);
-}
-
-.tonearm-shaft {
-    position: absolute;
-    left: calc(var(--deck) * -0.0075);
-    top: calc(var(--deck) * -0.07);
-    width: calc(var(--deck) * 0.015);
-    height: calc(var(--deck) * 0.45);
-    border-radius: 4px;
-    background: linear-gradient(90deg, #fbfbfb, #b4b4b4);
-    box-shadow: 4px 8px 12px rgba(0, 0, 0, 0.22);
-    z-index: 2;
-}
-
-.tonearm-counter {
-    position: absolute;
-    left: calc(var(--deck) * -0.025);
-    top: calc(var(--deck) * -0.135);
-    width: calc(var(--deck) * 0.05);
-    height: calc(var(--deck) * 0.07);
-    border-radius: 6px;
-    background: linear-gradient(90deg, #3a3a3a, #121212);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.35);
-    z-index: 1;
-}
-
-.tonearm-head {
-    position: absolute;
-    left: calc(var(--deck) * -0.02);
-    top: calc(var(--deck) * 0.35);
-    width: calc(var(--deck) * 0.04);
-    height: calc(var(--deck) * 0.07);
-    border-radius: 3px;
-    background: linear-gradient(90deg, #3a3a3a, #161616);
-    border-left: 3px solid var(--accent, #ff3b30);
-    box-shadow: 3px 6px 10px rgba(0, 0, 0, 0.4);
-    z-index: 2;
-}
-
-/* ── The record ── */
+/* ── Record ── */
 .vinyl-platter {
     position: absolute;
-    left: 12%;
-    top: 12%;
-    width: 76%;
-    height: 76%;
+    left: calc(var(--u) * 10);
+    top: calc(var(--u) * 9.5);
+    width: calc(var(--u) * 56);
+    height: calc(var(--u) * 56);
     z-index: 2;
 }
 
@@ -2857,70 +2826,250 @@ body.is-dragging #main-view { background: var(--panel-strong); }
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: #060606;
+    /* smooth inner band, slightly lighter than the grooved area */
+    background: radial-gradient(circle closest-side, #171717 0 50%, #0a0a0a 50.5% 100%);
     box-shadow:
-        0 0 0 1px rgba(255, 255, 255, 0.04),
-        -6px -6px 18px rgba(0, 0, 0, 0.35),
-        10px 14px 36px rgba(0, 0, 0, 0.55);
+        0 0 0 calc(var(--u) * 0.25) #2a2a2a,
+        0 calc(var(--u) * 0.9) calc(var(--u) * 2.6) rgba(0, 0, 0, 0.5),
+        inset 0 0 0 calc(var(--u) * 0.3) #000;
     will-change: transform;
 }
 
 .vinyl-grooves {
     position: absolute;
-    inset: 2.5%;
+    inset: 1.6%;
     border-radius: 50%;
     background:
-        /* track gaps */
-        radial-gradient(circle, transparent 0 40%, rgba(0, 0, 0, 0.9) 40.3% 40.8%, transparent 41.1% 58%, rgba(0, 0, 0, 0.9) 58.3% 58.8%, transparent 59.1% 76%, rgba(0, 0, 0, 0.9) 76.3% 76.8%, transparent 77.1%),
-        repeating-radial-gradient(circle at 50% 50%,
-            rgba(255, 255, 255, 0.035) 0 1px,
-            transparent 1px 3px);
+        /* bright track gaps, like the reference */
+        radial-gradient(circle closest-side,
+            transparent 0 57%, rgba(255, 255, 255, 0.16) 57.2% 57.7%, transparent 57.9% 64%,
+            rgba(255, 255, 255, 0.16) 64.2% 64.7%, transparent 64.9% 71%,
+            rgba(255, 255, 255, 0.16) 71.2% 71.7%, transparent 71.9% 78%,
+            rgba(255, 255, 255, 0.16) 78.2% 78.7%, transparent 78.9% 85%,
+            rgba(255, 255, 255, 0.16) 85.2% 85.7%, transparent 85.9% 92%,
+            rgba(255, 255, 255, 0.16) 92.2% 92.7%, transparent 92.9%),
+        /* fine grooves */
+        repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0 0.6px, transparent 0.6px 2.2px);
+    -webkit-mask: radial-gradient(circle closest-side, transparent 0 51%, #000 51.5%);
+    mask: radial-gradient(circle closest-side, transparent 0 51%, #000 51.5%);
     pointer-events: none;
 }
 
-/* Light sweep that stays still while the record turns underneath */
+/* Gloss that stays still while the record turns under it */
 .vinyl-sheen {
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: conic-gradient(from 25deg,
-        transparent 0 6%,
-        rgba(255, 255, 255, 0.13) 13%,
-        transparent 21% 50%,
-        rgba(255, 255, 255, 0.09) 63%,
-        transparent 71%);
+    background: conic-gradient(from 0deg,
+        transparent 0deg, rgba(255, 255, 255, 0.05) 12deg, rgba(255, 255, 255, 0.26) 38deg, rgba(255, 255, 255, 0.05) 66deg, transparent 80deg,
+        transparent 180deg, rgba(255, 255, 255, 0.04) 192deg, rgba(255, 255, 255, 0.2) 218deg, rgba(255, 255, 255, 0.04) 246deg, transparent 260deg);
+    -webkit-mask: radial-gradient(circle closest-side, transparent 0 36%, #000 37%);
+    mask: radial-gradient(circle closest-side, transparent 0 36%, #000 37%);
     mix-blend-mode: screen;
     pointer-events: none;
 }
 
+/* Album art is the label */
 .vinyl-label {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 36%;
-    height: 36%;
+    width: 34%;
+    height: 34%;
     border-radius: 50%;
     transform: translate(-50%, -50%);
     background-size: cover;
     background-position: center;
-    background-color: #222;
+    background-color: #d9d9d9;
     box-shadow:
-        0 0 0 4px #000,
-        inset 0 0 24px rgba(0, 0, 0, 0.55);
+        0 0 0 calc(var(--u) * 0.3) #040404,
+        0 0 0 calc(var(--u) * 0.5) #2d2d2d,
+        inset 0 0 calc(var(--u) * 1.2) rgba(0, 0, 0, 0.35);
 }
 
+/* Spindle */
 .vinyl-hole {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 2.2%;
-    height: 2.2%;
-    min-width: 6px;
-    min-height: 6px;
-    border-radius: 50%;
-    background: #d8d8d8;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    width: calc(var(--u) * 1.5);
+    height: calc(var(--u) * 1.5);
     transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffffff, #9a9a9a 70%);
+    box-shadow:
+        0 0 0 calc(var(--u) * 0.35) rgba(255, 255, 255, 0.55),
+        0 0 0 calc(var(--u) * 0.55) rgba(0, 0, 0, 0.35),
+        0 calc(var(--u) * 0.2) calc(var(--u) * 0.4) rgba(0, 0, 0, 0.5);
+}
+
+/* ── Tonearm pivot cup (static) ── */
+.vinyl-arm-base {
+    position: absolute;
+    left: calc(var(--u) * 80);
+    top: calc(var(--u) * 16);
+    width: calc(var(--u) * 18);
+    height: calc(var(--u) * 18);
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fdfdfd, #b3b5b7 75%);
+    box-shadow:
+        0 0 0 calc(var(--u) * 0.4) #8f9193,
+        0 0 0 calc(var(--u) * 0.8) rgba(255, 255, 255, 0.7),
+        0 calc(var(--u) * 1) calc(var(--u) * 2.4) rgba(0, 0, 0, 0.3);
+    z-index: 3;
+}
+.vinyl-arm-base::before {
+    content: "";
+    position: absolute;
+    inset: 17%;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #7d8083, #e9eaeb 60%, #a9abae);
+    box-shadow: inset 0 0 0 calc(var(--u) * 0.3) rgba(0, 0, 0, 0.18), inset 0 calc(var(--u) * 0.5) calc(var(--u) * 1) rgba(0, 0, 0, 0.25);
+}
+/* little lever on the cup */
+.vinyl-arm-base::after {
+    content: "";
+    position: absolute;
+    left: 14%;
+    top: 24%;
+    width: 16%;
+    height: 8%;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #f3f3f3, #8d8f91);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    transform: rotate(-24deg);
+}
+
+/* ── Tonearm (SVG; anchored on the pivot, JS rotates it) ── */
+.vinyl-tonearm {
+    position: absolute;
+    left: calc(var(--u) * 80);
+    top: calc(var(--u) * 16);
+    width: 0;
+    height: 0;
+    z-index: 4;
+    transform: rotate(12deg);
+    will-change: transform;
+}
+.vinyl-tonearm svg {
+    position: absolute;
+    left: calc(var(--u) * -20);
+    top: calc(var(--u) * -14);
+    width: calc(var(--u) * 40);
+    height: calc(var(--u) * 70);
+    overflow: visible;
+    filter: drop-shadow(calc(var(--u) * 0.8) calc(var(--u) * 1.4) calc(var(--u) * 1.1) rgba(0, 0, 0, 0.3));
+}
+
+/* ── Volume fader ── */
+.vinyl-fader-well {
+    position: absolute;
+    left: calc(var(--u) * 81);
+    top: calc(var(--u) * 34);
+    width: calc(var(--u) * 8);
+    height: calc(var(--u) * 35);
+    --vol: 1;
+    border-radius: calc(var(--u) * 1);
+    background: linear-gradient(90deg, #0b0b0b, #262626 50%, #0b0b0b);
+    box-shadow:
+        0 0 0 calc(var(--u) * 0.5) color-mix(in srgb, var(--panel) 70%, black),
+        0 0 0 calc(var(--u) * 0.85) rgba(255, 255, 255, 0.4),
+        inset 0 0 calc(var(--u) * 1.5) #000,
+        0 calc(var(--u) * 0.7) calc(var(--u) * 1.4) rgba(0, 0, 0, 0.3);
+    touch-action: none;
+    cursor: ns-resize;
+    z-index: 3;
+}
+
+/* Massive invisible hit box so you never miss the slider */
+.vinyl-fader-well::before {
+    content: "";
+    position: absolute;
+    inset: calc(var(--u) * -4) calc(var(--u) * -6); 
+}
+.vinyl-fader-well:focus-visible { outline: 2px solid #1a73ff; outline-offset: 6px; }
+.fader-slot {
+    position: absolute;
+    left: 50%;
+    top: calc(var(--u) * 1.5);
+    width: calc(var(--u) * 1);
+    height: calc(100% - var(--u) * 3);
+    transform: translateX(-50%);
+    border-radius: 2px;
+    background: #000;
+    box-shadow: 0 0 0 calc(var(--u) * 0.2) #3a3a3a;
+}
+.fader-cap {
+    position: absolute;
+    left: 50%;
+    top: calc(var(--u) * 1.2 + (1 - var(--vol)) * var(--u) * 28.2);
+    width: calc(var(--u) * 5.6);
+    height: calc(var(--u) * 4.4);
+    transform: translateX(-50%);
+    border-radius: calc(var(--u) * 0.5);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--paper) 100%, white) 0%, color-mix(in srgb, var(--paper) 80%, black) 46%, color-mix(in srgb, var(--panel) 70%, black) 50%, color-mix(in srgb, var(--paper) 90%, white) 54%, color-mix(in srgb, var(--panel) 80%, black) 100%);
+    box-shadow:
+        0 calc(var(--u) * 0.5) calc(var(--u) * 1) rgba(0, 0, 0, 0.65),
+        inset 0 0 0 calc(var(--u) * 0.15) rgba(255, 255, 255, 0.4);
+    pointer-events: none; /* Let the well handle all the clicking */
+    transition: top 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Disable transition while dragging for instant tracking */
+.vinyl-fader-well.is-dragging .fader-cap {
+    transition: none;
+}
+
+.fader-scale {
+    position: absolute;
+    left: calc(var(--u) * 90.6);
+    top: calc(var(--u) * 37);
+    width: calc(var(--u) * 2.6);
+    height: calc(var(--u) * 29);
+    border-left: calc(var(--u) * 0.2) solid #4a4c4e;
+    background:
+        repeating-linear-gradient(180deg, #4a4c4e 0 calc(var(--u) * 0.2), transparent calc(var(--u) * 0.2) calc(var(--u) * 3.6)) 0 0 / 100% 100% no-repeat;
+    pointer-events: none;
+}
+.fader-scale::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: calc(var(--u) * 1.8);
+    width: 55%;
+    height: calc(100% - var(--u) * 1.8);
+    background: repeating-linear-gradient(180deg, #4a4c4e 0 calc(var(--u) * 0.2), transparent calc(var(--u) * 0.2) calc(var(--u) * 3.6));
+}
+.fader-sign {
+    position: absolute;
+    left: calc(var(--u) * 91.6);
+    transform: translateX(-50%);
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: max(7px, calc(var(--u) * 1.8));
+    line-height: 1;
+    color: var(--text-dim);
+    pointer-events: none;
+}
+.fader-sign--plus { top: calc(var(--u) * 34); }
+.fader-sign--minus { top: calc(var(--u) * 67.4); }
+
+.fader-led {
+    position: absolute;
+    left: calc(var(--u) * 91.6);
+    top: calc(var(--u) * 51.5);
+    width: calc(var(--u) * 1.5);
+    height: calc(var(--u) * 1.5);
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: #6f8f72;
+    box-shadow: 0 0 0 calc(var(--u) * 0.3) #cfd1d3;
+    transition: background 300ms var(--ease), box-shadow 300ms var(--ease);
+}
+.fader-led.is-on {
+    background: var(--accent);
+    box-shadow: 0 0 0 calc(var(--u) * 0.3) #cfd1d3, 0 0 calc(var(--u) * 1.6) var(--accent);
 }
 
 /* ============================================================
@@ -2940,12 +3089,12 @@ body.is-dragging #main-view { background: var(--panel-strong); }
 
 .vinyl-title {
     font-family: var(--font-body);
-    font-size: clamp(44px, 6vw, 96px);
+    font-size: clamp(40px, 4.6vw, 76px);
     font-weight: 900;
     line-height: 0.92;
     letter-spacing: -0.035em;
     text-transform: uppercase;
-    margin: 0 0 18px 0;
+    margin: 0 0 12px 0;
     color: #fff;
     text-wrap: balance;
     overflow-wrap: anywhere;
@@ -2955,9 +3104,10 @@ body.is-dragging #main-view { background: var(--panel-strong); }
     -webkit-line-clamp: 3;
     line-clamp: 3;
     overflow: hidden;
+    padding-bottom: 0.1em;
 }
-.vinyl-title--md { font-size: clamp(36px, 4.8vw, 72px); }
-.vinyl-title--lg { font-size: clamp(28px, 3.5vw, 52px); line-height: 0.98; }
+.vinyl-title--md { font-size: clamp(34px, 3.9vw, 62px); }
+.vinyl-title--lg { font-size: clamp(28px, 3vw, 46px); line-height: 0.98; }
 
 /* "Remastered 2019", "Live", "feat. …" — pulled out of the title */
 .vinyl-tag {
@@ -3072,14 +3222,14 @@ body.is-dragging #main-view { background: var(--panel-strong); }
 @media (max-width: 900px) {
     .vinyl-stage {
         flex-direction: column;
-        gap: 32px;
-        padding: 20px;
+        align-items: center;
         justify-content: flex-start;
-        padding-top: 9vh;
+        gap: 28px;
+        padding: 76px 20px 32px;
         overflow-y: auto;
     }
-    .vinyl-deck-container { --deck: min(80vw, 400px); }
-    .vinyl-sidebar { align-items: flex-start; text-align: left; width: 100%; max-width: none; }
+    .vinyl-deck-container { --w: min(92vw, 560px); margin-top: auto; }
+    .vinyl-sidebar { flex: none; margin-bottom: auto; align-items: flex-start; text-align: left; width: 100%; max-width: 560px; }
     .vinyl-meta { margin-bottom: 28px; }
     .vinyl-controls { margin-bottom: 28px; }
     .vinyl-title { font-size: 40px; -webkit-line-clamp: 2; line-clamp: 2; }

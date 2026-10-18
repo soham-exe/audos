@@ -3364,6 +3364,14 @@ if (volumeFill) volumeFill.style.width = '100%';
 audio.volume = 1.0;
 let lastVolume = 1.0;
 
+// Helper to keep the normal UI volume bar in sync globally
+function updateVolumeUI(vol: number) {
+    if (volumeFill) volumeFill.style.width = `${vol * 100}%`;
+    if (volumeIcon) {
+        volumeIcon.src = vol === 0 ? '/icons/volume-mute.svg' : '/icons/volume.svg';
+    }
+}
+
 if (volumeBtn && volumeIcon) {
     volumeBtn.addEventListener('click', () => {
         if (audio.volume > 0) {
@@ -3559,11 +3567,19 @@ libraryTabs.forEach(tab => {
 function setupKeybindings() {
     document.addEventListener('keydown', (e) => {
         const isSearchFocused = document.activeElement === searchInput;
+        
+        // If an input is focused, let the browser handle keystrokes normally
+        if (isSearchFocused) return;
 
-        if (e.code === 'Space' && !isSearchFocused) {
+        // Spacebar: Handled locally by vinyl mode, but global here
+        if (e.code === 'Space') {
+            // If we're in vinyl mode, it handles its own spacebar to prevent double toggles
+            if (document.getElementById('vinyl-overlay')) return;
             e.preventDefault();
             document.getElementById('btn-play')?.click();
         }
+        
+        // Next / Prev
         if (e.ctrlKey && e.code === 'ArrowRight') {
             e.preventDefault();
             document.getElementById('btn-next')?.click();
@@ -3572,6 +3588,22 @@ function setupKeybindings() {
             e.preventDefault();
             document.getElementById('btn-prev')?.click();
         }
+        
+        // Volume Up / Down
+        if (e.ctrlKey && e.code === 'ArrowUp') {
+            e.preventDefault();
+            const newVol = Math.min(1, audio.volume + 0.05);
+            audio.volume = newVol;
+            updateVolumeUI(newVol);
+        }
+        if (e.ctrlKey && e.code === 'ArrowDown') {
+            e.preventDefault();
+            const newVol = Math.max(0, audio.volume - 0.05);
+            audio.volume = newVol;
+            updateVolumeUI(newVol);
+        }
+
+        // Search
         if (e.ctrlKey && e.key === '/') {
             e.preventDefault();
             searchInput?.focus();
@@ -4231,12 +4263,12 @@ window.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 let vinylAnimationFrame: number | null = null;
 
-// Tonearm angles in degrees (CSS rotate, clockwise-positive, 0 = pointing straight down).
-// These match the deck geometry in vinyl-mode.css (pivot 88%/12%, arm 37% long, record
-// centred at 50%/50% with radius 38%), so the stylus lands on the groove at every angle.
-const ARM_REST = -10;  // parked just off the record's right edge
-const ARM_OUTER = 7;   // stylus on the outer groove (start of the song)
-const ARM_INNER = 45;  // stylus near the label (end of the song)
+// Tonearm angles in degrees (CSS rotate, clockwise-positive, 0 = arm pointing straight down).
+// Measured against the deck geometry in vinyl-mode.css (pivot 80u/16u, record centre 38u/37.5u,
+// radius 28u, stylus 50.6u from the pivot). If you move the record or pivot, retune these three.
+const ARM_REST = 12;   // parked, clear of the record
+const ARM_OUTER = 26;  // stylus on the outer groove (start of the song)
+const ARM_INNER = 38;  // stylus next to the label (end of the song)
 const RECORD_DEG_PER_SEC = 200; // 33⅓ rpm
 
 const VINYL_TITLE_MAX = 60;
@@ -4283,9 +4315,15 @@ function openVinylMode() {
                 <div class="vinyl-deck">
                     <div class="vinyl-platter-ring"></div>
 
-                    <button class="vinyl-deck-btn" id="vinyl-deck-play" title="Play/Pause">
-                        <span>Start / Stop</span>
-                    </button>
+                    <!-- Power knob + labels (decorative) -->
+                    <span class="deck-label" style="left:calc(var(--u)*5.2);top:calc(var(--u)*4.6)">Off</span>
+                    <span class="deck-label" style="left:calc(var(--u)*12.8);top:calc(var(--u)*4.6)">On</span>
+                    <div class="vinyl-power" id="vinyl-power"></div>
+                    <span class="deck-label" style="left:calc(var(--u)*9);top:calc(var(--u)*13.4)">Power</span>
+
+                    <!-- Start / Stop -->
+                    <button class="vinyl-deck-btn" id="vinyl-deck-play" title="Start / Stop" aria-label="Start or stop"></button>
+                    <span class="deck-label" style="left:calc(var(--u)*9);top:calc(var(--u)*70.8)">Start/Stop</span>
 
                     <!-- Record -->
                     <div class="vinyl-platter">
@@ -4297,13 +4335,55 @@ function openVinylMode() {
                         <div class="vinyl-sheen"></div>
                     </div>
 
-                    <!-- Tonearm (anchored on its pivot) -->
+                    <!-- Tonearm: pivot cup + arm -->
+                    <div class="vinyl-arm-base"></div>
                     <div class="vinyl-tonearm" id="vinyl-tonearm">
-                        <div class="tonearm-counter"></div>
-                        <div class="tonearm-shaft"></div>
-                        <div class="tonearm-base"></div>
-                        <div class="tonearm-head"></div>
+                        <svg viewBox="-20 -14 40 70" aria-hidden="true">
+                            <defs>
+                                <linearGradient id="va-metal" x1="0" x2="1" y1="0" y2="0">
+                                    <stop offset="0" stop-color="#7d8184"/>
+                                    <stop offset="0.35" stop-color="#f7f8f8"/>
+                                    <stop offset="0.7" stop-color="#b0b3b6"/>
+                                    <stop offset="1" stop-color="#6c7074"/>
+                                </linearGradient>
+                                <radialGradient id="va-collar" cx="0.35" cy="0.3" r="0.8">
+                                    <stop offset="0" stop-color="#ffffff"/>
+                                    <stop offset="1" stop-color="#8d9094"/>
+                                </radialGradient>
+                            </defs>
+                            <!-- counterweight -->
+                            <rect x="-3.4" y="-13.5" width="6.8" height="9.5" rx="1.1" fill="url(#va-metal)" stroke="#5d6165" stroke-width="0.2"/>
+                            <rect x="-3.4" y="-6.4" width="6.8" height="0.9" fill="#4d5155"/>
+                            <rect x="-3.4" y="-11.6" width="6.8" height="0.5" fill="#4d5155" opacity="0.6"/>
+                            <!-- tube: shadow edge, body, highlight -->
+                            <path d="M0 -4 V33 C0 39 -1.4 41.5 -4 44" fill="none" stroke="#5d6165" stroke-width="1.9" stroke-linecap="round"/>
+                            <path d="M0 -4 V33 C0 39 -1.4 41.5 -4 44" fill="none" stroke="#cdd0d2" stroke-width="1.35" stroke-linecap="round"/>
+                            <path d="M-0.25 -4 V33 C-0.25 39 -1.65 41.5 -4.2 44" fill="none" stroke="#ffffff" stroke-width="0.4" stroke-linecap="round" opacity="0.85"/>
+                            <rect x="-1.25" y="29.5" width="2.5" height="1.1" rx="0.3" fill="#7a7e82"/>
+                            <!-- pivot collar -->
+                            <circle cx="0" cy="0" r="2.7" fill="url(#va-collar)" stroke="#6a6e72" stroke-width="0.25"/>
+                            <circle cx="0" cy="0" r="1.1" fill="#34373a"/>
+                            <!-- headshell + cartridge -->
+                            <g transform="translate(-4 44) rotate(20)">
+                                <rect x="-1.3" y="-1" width="2.6" height="2.6" rx="0.5" fill="url(#va-metal)"/>
+                                <rect x="-2.1" y="1.2" width="4.2" height="5.6" rx="0.9" fill="url(#va-metal)" stroke="#6a6e72" stroke-width="0.2"/>
+                                <rect x="1.6" y="2.6" width="3.4" height="0.55" rx="0.27" fill="#aeb1b4" stroke="#6a6e72" stroke-width="0.12"/>
+                                <rect x="-1.7" y="6.4" width="3.4" height="1.7" rx="0.4" fill="#1f2022"/>
+                                <rect x="-1.7" y="6.4" width="0.8" height="1.7" fill="var(--accent, #ff3b30)"/>
+                            </g>
+                        </svg>
                     </div>
+
+                    <!-- Volume fader -->
+                    <span class="fader-sign fader-sign--plus">+</span>
+                    <div class="vinyl-fader-well" id="vinyl-fader" role="slider" tabindex="0"
+                         aria-label="Volume" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                        <div class="fader-slot"></div>
+                        <div class="fader-cap"></div>
+                    </div>
+                    <div class="fader-scale"></div>
+                    <span class="fader-led" id="vinyl-led"></span>
+                    <span class="fader-sign fader-sign--minus">−</span>
                 </div>
             </div>
 
@@ -4351,6 +4431,9 @@ function openVinylMode() {
     const labelEl = document.getElementById('vinyl-label')!;
     const recordEl = document.getElementById('vinyl-record')!;
     const tonearmEl = document.getElementById('vinyl-tonearm')!;
+    const powerEl = document.getElementById('vinyl-power')!;
+    const ledEl = document.getElementById('vinyl-led')!;
+    const faderEl = document.getElementById('vinyl-fader')!;
 
     const playBtn = document.getElementById('vinyl-play') as HTMLButtonElement;
     const deckBtn = document.getElementById('vinyl-deck-play') as HTMLButtonElement;
@@ -4385,11 +4468,45 @@ function openVinylMode() {
         artistEl.textContent = currentTrack.artist_name || 'Unknown Artist';
         artistEl.title = artistEl.textContent;
 
+        // Reset record color to default dark vinyl
+        recordEl.style.background = 'radial-gradient(circle closest-side, #171717 0 50%, #0a0a0a 50.5% 100%)';
+
         if (currentTrack.thumbnail) {
             const url = `url("${String(currentTrack.thumbnail).replace(/"/g, '%22')}")`;
             labelEl.style.backgroundImage = url;
             bgEl.style.backgroundImage = url;
             bgEl.classList.add('is-on');
+
+            // Extract dominant color from album art
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 10; canvas.height = 10;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+                ctx.drawImage(img, 0, 0, 10, 10);
+                const data = ctx.getImageData(0, 0, 10, 10).data;
+                
+                let r = 0, g = 0, b = 0, count = 0;
+                // Skip the first and last few pixels (often just background or borders)
+                for (let i = 16; i < data.length - 16; i += 4) {
+                    if (data[i + 3] > 200) { // Only opaque pixels
+                        r += data[i]; g += data[i + 1]; b += data[i + 2]; count++;
+                    }
+                }
+                if (count === 0) return;
+                
+                // Get average color
+                r = Math.floor(r / count); g = Math.floor(g / count); b = Math.floor(b / count);
+                
+                // Darken it significantly so it looks like colored vinyl
+                const mix = (c: number) => Math.floor(c * 0.35); 
+                
+                // Apply a radial gradient using the extracted color
+                recordEl.style.background = `radial-gradient(circle closest-side, rgba(${mix(r)}, ${mix(g)}, ${mix(b)}, 1) 0 50%, rgba(${mix(r)}, ${mix(g)}, ${mix(b)}, 0.6) 50.5% 100%)`;
+            };
+            img.src = currentTrack.thumbnail;
         } else {
             labelEl.style.backgroundImage = 'none';
             bgEl.classList.remove('is-on');
@@ -4403,7 +4520,70 @@ function openVinylMode() {
         shownPlaying = playing;
         playIcon.innerHTML = `<path d="${playing ? PATH_PAUSE : PATH_PLAY}"/>`;
         deckBtn.classList.toggle('is-on', playing);
+        powerEl.classList.toggle('is-on', playing);
+        ledEl.classList.toggle('is-on', playing);
     }
+
+    // ── Volume fader ──
+    let draggingFader = false;
+    let shownVolume = -1;
+    
+    function paintVolume(v: number) {
+        shownVolume = v;
+        faderEl.style.setProperty('--vol', String(v));
+        faderEl.setAttribute('aria-valuenow', String(Math.round(v * 100)));
+    }
+    
+    function setVolume(v: number) {
+        v = Math.max(0, Math.min(1, v));
+        audio.volume = v;
+        paintVolume(v);
+    }
+    
+    // Calculate based on the entire track height
+    function volumeFromPointer(clientY: number) {
+        const r = faderEl.getBoundingClientRect();
+        // 1.2u padding at top and bottom (total 2.4u). Total height is 35u.
+        const pad = r.height * (1.2 / 35);
+        const travel = r.height - (pad * 2);
+        const pct = 1 - (clientY - r.top - pad) / travel;
+        return Math.max(0, Math.min(1, pct));
+    }
+    
+    paintVolume(audio.volume);
+
+    faderEl.addEventListener('pointerdown', (e) => {
+        draggingFader = true;
+        faderEl.classList.add('is-dragging');
+        faderEl.setPointerCapture(e.pointerId);
+        // Instantly jump to tap location
+        setVolume(volumeFromPointer(e.clientY));
+    });
+    
+    window.addEventListener('pointermove', (e) => {
+        if (draggingFader) {
+            e.preventDefault();
+            setVolume(volumeFromPointer(e.clientY));
+        }
+    });
+    
+    const endFaderDrag = () => { 
+        if (!draggingFader) return;
+        draggingFader = false; 
+        faderEl.classList.remove('is-dragging');
+    };
+    window.addEventListener('pointerup', endFaderDrag);
+    window.addEventListener('pointercancel', endFaderDrag);
+    faderEl.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        setVolume(audio.volume + (e.deltaY < 0 ? 0.05 : -0.05));
+    }, { passive: false });
+    faderEl.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            setVolume(audio.volume + (e.key === 'ArrowUp' ? 0.05 : -0.05));
+        }
+    });
 
     // ── Animation loop ──
     let rotation = 0;
@@ -4441,6 +4621,9 @@ function openVinylMode() {
         armAngle += (armTarget - armAngle) * Math.min(1, dt * 4);
         tonearmEl.style.transform = `rotate(${armAngle.toFixed(2)}deg)`;
 
+        // Keep the fader in sync if volume is changed elsewhere in the app
+        if (!draggingFader && Math.abs(audio.volume - shownVolume) > 0.001) paintVolume(audio.volume);
+
         vinylAnimationFrame = requestAnimationFrame(frame);
     }
     vinylAnimationFrame = requestAnimationFrame(frame);
@@ -4471,11 +4654,13 @@ function openVinylMode() {
     const keyHandler = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
             close();
-        } else if (e.key === ' ' && !(e.target as HTMLElement)?.closest('button, input, textarea')) {
-            e.preventDefault();
-            togglePlay();
-        } else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && audio.duration > 0) {
-            audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + (e.key === 'ArrowRight' ? 5 : -5)));
+        } else if (e.code === 'Space') {
+            // If the user is typing in an input, don't hijack space
+            const tag = (e.target as HTMLElement)?.tagName;
+            if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+                e.preventDefault();
+                togglePlay();
+            }
         }
     };
     document.addEventListener('keydown', keyHandler);
