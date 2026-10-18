@@ -676,7 +676,7 @@ let resumePosition = 0;
 let consecutiveStreamErrors = 0;
 let lastStreamErrorAt = 0;
 const STREAM_ERROR_WINDOW_MS = 8000;   // errors within 8s count as "consecutive"
-const STREAM_ERROR_THRESHOLD = 1;      // 1 strike → treat as network outage
+const STREAM_ERROR_THRESHOLD = 2;      // 2 strikes → treat as network outage
 
 // Set true when the current track's playback was interrupted (network,
 // error, offline). `ended` should NOT auto-advance in that case.
@@ -2157,7 +2157,11 @@ async function playTrack(track: Track) {
             // We ARE online, but something's rate-limiting us. Cool down.
             console.warn('[play] online but rate-limited — cooling down');
             window.__audosRateLimited = true;
-            setTimeout(() => { window.__audosRateLimited = false; }, 60_000);
+            showToast('Slowing down to avoid YouTube rate limits', 'info', 5000);
+            setTimeout(() => {
+                window.__audosRateLimited = false;
+                console.log('[play] rate-limit cooldown expired');
+            }, 180_000);  // 3 minutes
             consecutiveStreamErrors = 0;   // reset before trying alt
 
             // Fall through to try the alternative below
@@ -2165,6 +2169,14 @@ async function playTrack(track: Track) {
 
         // ── Only try the alternative for YouTube streams ──
         if (track.source_type !== 'youtube_stream') return;
+
+        // If we just rate-limited ourselves in the branch above, don't
+        // try to find an alternative — it'll fail too. Let the user
+        // manually resume.
+        if (window.__audosRateLimited) {
+            console.warn('[play] rate limited — not attempting alternative');
+            return;
+        }
 
         try {
             const alt = await invoke<YtTrack | null>('find_alternative', {
@@ -2310,12 +2322,19 @@ async function playTrack(track: Track) {
 // Context auto-extension (radio mode)
 // ==========================================
 let extendingQueue = false;
-const QUEUE_EXTEND_THRESHOLD = 2;
-const MAX_AUTO_QUEUE = 200;
+const QUEUE_EXTEND_THRESHOLD = 5;   // extend when 5 or fewer remain
+const MAX_AUTO_QUEUE = 300;          // was 200 — bigger buffer, fewer calls
 
 async function maybeExtendQueue() {
     if (extendingQueue) return;
     if (!currentTrack) return;
+
+    // Don't try to extend while we're in a rate-limit cooldown — the
+    // attempt will fail anyway and make things worse.
+    if (window.__audosRateLimited) {
+        console.log('[radio] Skipping extension — rate limited');
+        return;
+    }
 
     // Only count context tracks — user queue is user-controlled
     const remaining = contextQueue.length - contextIndex - 1;

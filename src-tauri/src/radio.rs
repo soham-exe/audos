@@ -33,7 +33,9 @@ pub async fn fetch_related_tracks(yt_id: String) -> Result<Vec<YtTrack>, String>
         .arg("--dump-json")
         .arg("--flat-playlist")
         .arg("--playlist-end")
-        .arg("5")
+        .arg("10")             // ask for more so extensions cover more plays
+        .arg("--sleep-requests")
+        .arg("1")              // 1s between HTTP requests within yt-dlp
         .arg("--no-warnings")
         .arg(&mix_url)
         .output()

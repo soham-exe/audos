@@ -1,4 +1,5 @@
 use crate::yt_bridge::{get_yt_dlp_path, YtTrack};
+use chrono::format::Numeric::Year;
 use serde::Serialize;
 use serde_json::Value;
 use tokio::process::Command;
@@ -96,7 +97,7 @@ fn all_categories(year: i32) -> Vec<(&'static str, String)> {
 
         let region = user_region();
         let trending_query = if region == "Global" {
-            format!("top Global hits {} playlist", year)
+            format!("global spotify songs {}", year)
         } else {
             format!("top spotify hits {} {} playlist", year,region)
         };
@@ -153,8 +154,8 @@ fn all_categories(year: i32) -> Vec<(&'static str, String)> {
             // ── Indian / Regional ──
             ("Bollywood",          format!("bollywood hits {} playlist", year)),
             ("Punjabi",            format!("punjabi hits {} playlist", year)),
-            ("Tamil Hits",         format!("tamil hits {} playlist", year)),
-            ("Telugu Hits",        format!("telugu hits {} playlist", year)),
+            ("Tamil Hits",         format!("trending tamil spotify hits {}playlist", year)),
+            ("Telugu Hits",        format!("trending telugu spotify hits {} playlist", year)),
             // ── Classical / Instrumental ──
             ("Classical",          "indian classical music playlist".to_string()),
             ("Orchestral",         "orchestral playlist".to_string()),
@@ -657,7 +658,6 @@ fn score_playlist(query: &str, title: &str, uploader: &str, playlist_count: Opti
     if t.contains("chart") || t.contains("billboard") { score += 3; }
     if t.contains("playlist") { score += 2; }
     if t.contains("mix") || t.contains("collection") { score += 1; }
-    if t.contains("2025") || t.contains("2026") { score += 3; }
     if t.contains("best") && !t.contains("best of") { score += 1; }
 
     // ── Uploader trust ──
