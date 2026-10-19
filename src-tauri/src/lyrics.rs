@@ -3,8 +3,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
-
+use std::time::{Duration, Instant,SystemTime};
+use std::fs;
+use ed25519_dalek::{VerifyingKey, Signature, Verifier};
+use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+use sha2::{Sha256, Digest};
+/// Public key that matches the private key used by sign-db.sh.
+/// If you rotate keys, you MUST ship a new app version.
+const EXPECTED_PUBKEY_B64: &str = "v/XpAxssLz/WGTQBzhTbIP6nyOYr+eg2xxtf8tMOhxk=";
 struct CachedLyrics {
     data: LyricsData,
     fetched_at: Instant,
@@ -175,7 +181,12 @@ async fn fetch_lrclib(client: &Client, title: &str, artist: &str, duration: i64)
             if !json["instrumental"].as_bool().unwrap_or(false) {
                 let plain = json["plainLyrics"].as_str().unwrap_or("").to_string();
                 let synced = json["syncedLyrics"].as_str().map(|lrc| parse_lrc(lrc, false));
-                if !plain.trim().is_empty() || synced.as_ref().map_or(false, |s| !s.is_empty()) {
+                
+                let lower_plain = plain.trim().to_lowercase();
+                let is_junk = lower_plain.len() < 5 || lower_plain == "instrumental" || lower_plain == "[instrumental]";
+                let has_synced = synced.as_ref().map_or(false, |s| !s.is_empty());
+                
+                if !is_junk || has_synced {
                     return Some(LyricsData { plain, synced, source: "LRCLIB".into() });
                 }
             }
@@ -348,28 +359,161 @@ async fn fetch_lyrica(client: &Client, title: &str, artist: &str) -> Option<Lyri
 }
 
 async fn fetch_custom_db(client: &Client, title: &str, artist: &str) -> Option<LyricsData> {
-    // Point this to your actual GitHub Repo!
-    let url = "https://raw.githubusercontent.com/soham-exe/audos-lyrics-db/main/lyrics_db.json";
-    
-    let resp = client.get(url).send().await.ok()?;
-    if !resp.status().is_success() { return None; }
-    
-    let text = resp.text().await.ok()?;
-    let json: Value = serde_json::from_str(&text).ok()?;
-    
-    let key = format!("{}|{}", title.to_lowercase().trim(), artist.to_lowercase().trim());
-    
-    if let Some(lrc_text) = json[key].as_str() {
-        println!("[lyrics] Hit custom DB!");
+    let base_url = "https://cdn.jsdelivr.net/gh/soham-exe/audos-lyrics-db@latest";
+    let json_url = format!("{}/lyrics_db.json", base_url);
+    let sig_url  = format!("{}/lyrics_db.json.sig", base_url);
+
+    let cache_dir = dirs::cache_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("audos");
+    let _ = fs::create_dir_all(&cache_dir);
+    let cache_json = cache_dir.join("lyrics_db.json");
+    let cache_sig  = cache_dir.join("lyrics_db.json.sig");
+
+    let mut json_text = String::new();
+    let mut sig_text  = String::new();
+    let mut needs_update = true;
+
+    // 1. Check if local cache exists and is less than 24 hours old
+    let cache_age_ok = fs::metadata(&cache_json)
+        .and_then(|m| m.modified())
+        .and_then(|t| SystemTime::now().duration_since(t).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)))
+        .map(|age| age.as_secs() < 86400)
+        .unwrap_or(false);
+
+    if cache_age_ok {
+        needs_update = false;
+        if let (Ok(j), Ok(s)) = (fs::read_to_string(&cache_json), fs::read_to_string(&cache_sig)) {
+            json_text = j;
+            sig_text  = s;
+        }
+    }
+
+    // 2. Download from CDN if missing or older than 24h
+    if needs_update {
+        println!("[DB] Fetching signed DB from CDN...");
+
+        let json_resp = client.get(&json_url).send().await;
+        let sig_resp  = client.get(&sig_url).send().await;
+
+        match (json_resp, sig_resp) {
+            (Ok(jr), Ok(sr)) => {
+                if jr.status().is_success() && sr.status().is_success() {
+                    if let (Ok(jtext), Ok(stext)) = (jr.text().await, sr.text().await) {
+                        println!("[DB] Downloaded JSON length: {}, Sig length: {}", jtext.len(), stext.len());
+                        
+                        match verify_db_signature(&jtext, &stext) {
+                            Ok(()) => {
+                                println!("[DB] Signature verified ✓");
+                                let changed = json_text != jtext || sig_text != stext;
+                                if changed {
+                                    println!("[DB] New signed DB version — updating cache.");
+                                    let _ = fs::write(&cache_json, &jtext);
+                                    let _ = fs::write(&cache_sig,  &stext);
+                                } else {
+                                    println!("[DB] Signed DB unchanged — refreshing timestamp.");
+                                    if let Ok(file) = fs::OpenOptions::new().write(true).open(&cache_json) {
+                                        let _ = file.set_modified(SystemTime::now());
+                                    }
+                                }
+                                json_text = jtext;
+                                sig_text  = stext;
+                            }
+                            Err(e) => {
+                                println!("[SECURITY WARNING] DB signature verification failed: {}", e);
+                                println!("[SECURITY WARNING] Rejecting download; using cache.");
+                            }
+                        }
+                    } else {
+                        println!("[DB] Failed to read response text.");
+                    }
+                } else {
+                    println!("[DB] HTTP Error - JSON: {}, Sig: {}", jr.status(), sr.status());
+                }
+            }
+            (Err(e1), _) => {
+                println!("[DB] JSON request failed: {}", e1);
+            }
+            (_, Err(e2)) => {
+                println!("[DB] Sig request failed: {}", e2);
+            }
+        }
+    }
+
+
+    if json_text.is_empty() { return None; }
+
+    // 3. Re-verify the cache too (protects against local disk tampering)
+    if !sig_text.is_empty() {
+        if let Err(e) = verify_db_signature(&json_text, &sig_text) {
+            println!("[SECURITY WARNING] Cached DB failed verification: {}", e);
+            return None;
+        }
+    }
+
+    // 4. Parse and search
+    let json: Value = serde_json::from_str(&json_text).ok()?;
+    let search_title  = title.to_lowercase().trim().to_string();
+    let search_artist = artist.to_lowercase().trim().to_string();
+
+    let mut best_match: Option<&str> = None;
+
+    if let Value::Object(map) = &json {
+        for (key, val) in map {
+            let k = key.to_lowercase();
+            if k.contains(&search_title) && (search_artist.is_empty() || k.contains(&search_artist)) {
+                if let Some(lrc_text) = val.as_str() {
+                    best_match = Some(lrc_text);
+                    break;
+                }
+            }
+        }
+    }
+
+    if let Some(lrc_text) = best_match {
         let synced = parse_lrc(lrc_text, false);
         let plain = synced.iter().map(|l| l.text.clone()).collect::<Vec<_>>().join("\n");
-        return Some(LyricsData { 
-            plain, 
-            synced: if synced.is_empty() { None } else { Some(synced) }, 
-            source: "Audos DB".into() 
-        });
+        let trimmed = plain.trim().to_lowercase();
+        
+        if trimmed.len() > 5 && trimmed != "instrumental" && trimmed != "[instrumental]" {
+            println!("[lyrics] Hit custom DB for: {}", title);
+            return Some(LyricsData {
+                plain,
+                synced: if synced.is_empty() { None } else { Some(synced) },
+                source: "Audos DB".into(),
+            });
+        }
     }
+
     None
+}
+fn verify_db_signature(json: &str, sig_b64: &str) -> Result<(), String> {
+    let pubkey_bytes = B64.decode(EXPECTED_PUBKEY_B64)
+        .map_err(|e| format!("bad pubkey b64: {}", e))?;
+    let pubkey_arr: [u8; 32] = pubkey_bytes.try_into()
+        .map_err(|_| "pubkey is not 32 bytes".to_string())?;
+    let verifying_key = VerifyingKey::from_bytes(&pubkey_arr)
+        .map_err(|e| format!("bad pubkey: {}", e))?;
+
+    let clean_sig: String = sig_b64.chars().filter(|c| !c.is_whitespace()).collect();
+    let sig_bytes = B64.decode(&clean_sig)
+        .map_err(|e| format!("bad sig b64: {}", e))?;
+    let sig_arr: [u8; 64] = sig_bytes.try_into()
+        .map_err(|_| "signature is not 64 bytes".to_string())?;
+    let signature = Signature::from_bytes(&sig_arr);
+
+    // ── STRICT NORMALIZATION (must exactly match sign_helper) ──
+    let json = json.trim_start_matches('\u{feff}').replace("\r\n", "\n");
+    let json = json.trim();
+
+    // Hash the normalized JSON
+    let mut hasher = Sha256::new();
+    hasher.update(json.as_bytes());
+    let hash = hasher.finalize();
+
+    // Verify the signature against the hash
+    verifying_key.verify(&hash, &signature)
+        .map_err(|e| format!("signature mismatch: {}", e))
 }
 
 #[tauri::command]
@@ -421,49 +565,55 @@ pub async fn fetch_lyrics(title: String, artist: String, duration: i64, current_
     let client = http_client()?;
     let mut final_result = None;
 
-    // 3. Loop through the waterfall
-    for search_title in search_titles {
-        let cache_key = format!("{}|{}|{}", search_title, artist, duration);
-        
-        // Check cache for this specific search query
-        {
-            let cache = lyrics_cache().lock().unwrap();
-            if let Some(entry) = cache.get(&cache_key) {
-                if entry.fetched_at.elapsed() < Duration::from_secs(CACHE_TTL_SECS) {
-                    println!("[lyrics] cache hit ({}): {}", entry.data.source, search_title);
-                    final_result = Some(entry.data.clone());
-                    break;
-                }
-            }
-        }
-
-        // 0. Custom DB
-        let mut result = fetch_custom_db(&client, &search_title, &artist).await;
-        
-        // 1. LRCLIB
-        if result.is_none() {
-            result = fetch_lrclib(&client, &search_title, &artist, duration).await;
-        }
-        
-        // 2. NetEase
-        if result.is_none() {
-            println!("[lyrics] LRCLIB miss, trying NetEase for: {}", search_title);
-            result = fetch_netease(&client, &search_title, &artist).await;
-        }
-        
-        // 3. Lyrica
-        if result.is_none() {
-            println!("[lyrics] NetEase miss, trying Lyrica for: {}", search_title);
-            result = fetch_lyrica(&client, &search_title, &artist).await;
-        }
-
-        // If we found something, cache it, save it, and break the loop!
-        if let Some(data) = result {
+    // ── PRIORITY 1: Check Custom DB against ALL title variations first ──
+    for search_title in &search_titles {
+        if let Some(data) = fetch_custom_db(&client, search_title, &artist).await {
             println!("[lyrics] hit {} for: {}", data.source, search_title);
-            let mut cache = lyrics_cache().lock().unwrap();
-            cache.insert(cache_key, CachedLyrics { data: data.clone(), fetched_at: Instant::now() });
             final_result = Some(data);
             break;
+        }
+    }
+
+    // ── PRIORITY 2: If Custom DB missed, waterfall through the network APIs ──
+    if final_result.is_none() {
+        for search_title in search_titles {
+            let cache_key = format!("{}|{}|{}", search_title, artist, duration);
+            
+            // Check cache for this specific search query
+            {
+                let cache = lyrics_cache().lock().unwrap();
+                if let Some(entry) = cache.get(&cache_key) {
+                    if entry.fetched_at.elapsed() < Duration::from_secs(CACHE_TTL_SECS) {
+                        println!("[lyrics] cache hit ({}): {}", entry.data.source, search_title);
+                        final_result = Some(entry.data.clone());
+                        break;
+                    }
+                }
+            }
+
+            // 1. LRCLIB
+            let mut result = fetch_lrclib(&client, &search_title, &artist, duration).await;
+            
+            // 2. NetEase
+            if result.is_none() {
+                println!("[lyrics] LRCLIB miss, trying NetEase for: {}", search_title);
+                result = fetch_netease(&client, &search_title, &artist).await;
+            }
+            
+            // 3. Lyrica
+            if result.is_none() {
+                println!("[lyrics] NetEase miss, trying Lyrica for: {}", search_title);
+                result = fetch_lyrica(&client, &search_title, &artist).await;
+            }
+
+            // If we found something, cache it, save it, and break the loop!
+            if let Some(data) = result {
+                println!("[lyrics] hit {} for: {}", data.source, search_title);
+                let mut cache = lyrics_cache().lock().unwrap();
+                cache.insert(cache_key, CachedLyrics { data: data.clone(), fetched_at: Instant::now() });
+                final_result = Some(data);
+                break;
+            }
         }
     }
 
@@ -477,6 +627,14 @@ pub async fn fetch_lyrics(title: String, artist: String, duration: i64, current_
                     *synced = adjusted;
                 }
             }
+            
+            // Cache successful custom DB hits under the main search key so we don't refetch it
+            if data.source == "Audos DB" {
+                let main_cache_key = format!("{}|{}|{}", base_title, artist, duration);
+                let mut cache = lyrics_cache().lock().unwrap();
+                cache.insert(main_cache_key, CachedLyrics { data: data.clone(), fetched_at: Instant::now() });
+            }
+            
             Ok(data)
         }
         None => {

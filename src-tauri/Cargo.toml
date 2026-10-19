@@ -4,6 +4,7 @@ version = "0.1.4"
 description = "Custom music player"
 authors = ["Soham"]
 edition = "2021"
+default-run = "audos"
 build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -27,6 +28,9 @@ rusqlite = { version = "0.31.0", features = ["bundled"] }
 walkdir = "2"
 id3 = "1.1"
 directories = "5"
+dirs = "5.0"
+sha2 = "0.10"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
 tauri-plugin-dialog = "2"
 tokio = { version = "1", features = ["full"] }
 axum = "0.7"
@@ -42,6 +46,11 @@ chrono = "0.4.45"
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2.12.0"
 tauri-plugin-process = "2"
+
+[dev-dependencies]
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+base64 = "0.22.1"
+rand_core = { version = "0.6", features = ["getrandom"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_UI_Shell"] }

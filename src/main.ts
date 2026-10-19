@@ -382,7 +382,8 @@ interface YtTrack {
 interface Playlist {
     name: string;
     folderPath: string;
-    tracks?: string[];
+    tracks?: string[];         // For physical folders (file paths)
+    customTracks?: Track[];    // For custom playlists (full objects)
 }
 
 // ==========================================
@@ -859,6 +860,12 @@ function getPlaylistTracks(pl: Playlist): Track[] {
         return currentTracks.filter(t => t.source_type === 'downloaded_native');
     }
 
+    // If it's a custom playlist with full track objects, return them directly
+    if (pl.customTracks && pl.customTracks.length > 0) {
+        return pl.customTracks;
+    }
+
+    // Fallback for older logic (physical folders)
     const norm = (p: string) => p.replace(/\\/g, '/');
     const playlistSet = pl.tracks ? new Set(pl.tracks) : null;
 
@@ -970,18 +977,34 @@ function renderSidebarPlaylist() {
             if (!raw) return;
             try {
                 const data = JSON.parse(raw);
-                if (!pl.tracks) pl.tracks = [];
+                
                 if (data.action === 'enqueue_playlist') {
+                    // Adding a whole playlist
+                    if (!pl.customTracks) pl.customTracks = [];
                     data.tracks.forEach((track: Track) => {
-                        if (!pl.tracks!.includes(track.file_path_or_url)) {
-                            pl.tracks!.push(track.file_path_or_url);
+                        if (!pl.customTracks!.some(t => t.file_path_or_url === track.file_path_or_url)) {
+                            pl.customTracks!.push(track);
                         }
                     });
                 } else {
-                    if (!pl.tracks.includes(data.file_path_or_url)) {
-                        pl.tracks.push(data.file_path_or_url);
+                    // Adding a single track
+                    // Convert YtTrack to a standard Track format if needed
+                    const trackToAdd = data.file_path_or_url ? data : {
+                        id: data.id,
+                        source_type: 'youtube_stream',
+                        file_path_or_url: data.id,
+                        title: data.title,
+                        artist_name: data.uploader,
+                        duration: data.duration,
+                        thumbnail: data.thumbnail
+                    };
+                    
+                    if (!pl.customTracks) pl.customTracks = [];
+                    if (!pl.customTracks.some(t => t.file_path_or_url === trackToAdd.file_path_or_url)) {
+                        pl.customTracks.push(trackToAdd);
                     }
                 }
+                
                 savePlaylists();
                 if (isShowingPlaylist && activePlaylistIndex === idx) {
                     displayedTracks = getPlaylistTracks(pl);
@@ -1255,6 +1278,28 @@ function renderHomeView() {
                 card.onclick = () => {
                     playContext(allTracks, i, feed.category);
                 };
+
+                // ── Make Card Draggable ──
+                card.draggable = true;
+                card.addEventListener('dragstart', (e) => {
+                    document.body.classList.add('is-dragging');
+                    if (e.dataTransfer) {
+                        e.dataTransfer.effectAllowed = 'copy';
+                        e.dataTransfer.setData('text/plain', JSON.stringify(allTracks[i]));
+                    }
+                    card.style.opacity = '0.5';
+                });
+                card.addEventListener('dragend', () => {
+                    document.body.classList.remove('is-dragging');
+                    card.style.opacity = '1';
+                });
+
+                // ── Right-click Context Menu ──
+                card.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    showContextMenu(e.clientX, e.clientY, allTracks[i]);
+                });
+
                 grid.appendChild(card);
             });
 
@@ -1867,8 +1912,40 @@ function showContextMenu(x: number, y: number, track: Track) {
     const items: { label: string; action: () => void; danger?: boolean }[] = [
         { label: 'Play Next', action: () => addToQueue(track, true) },
         { label: 'Add to Queue', action: () => addToQueue(track, false) },
-        { label: 'Delete from Database', action: () => deleteTrackFromDatabase(track), danger: true },
+        { label: 'Add to Playlist', action: () => showAddToPlaylistMenu(x, y, track) },
     ];
+
+    // If we are currently viewing a playlist, add a "Remove from Playlist" option
+    if (isShowingPlaylist && activePlaylistIndex >= 0) {
+        items.push({
+            label: 'Remove from Playlist',
+            action: () => {
+                const pl = playlists[activePlaylistIndex];
+                let changed = false;
+                
+                if (pl.customTracks) {
+                    const originalLen = pl.customTracks.length;
+                    pl.customTracks = pl.customTracks.filter(t => t.file_path_or_url !== track.file_path_or_url);
+                    if (pl.customTracks.length !== originalLen) changed = true;
+                }
+                if (pl.tracks) {
+                    const originalLen = pl.tracks.length;
+                    pl.tracks = pl.tracks.filter(id => id !== track.file_path_or_url);
+                    if (pl.tracks.length !== originalLen) changed = true;
+                }
+
+                if (changed) {
+                    savePlaylists();
+                    displayedTracks = getPlaylistTracks(pl);
+                    renderTracks(displayedTracks, pl.name);
+                    showToast('Removed from playlist', 'info');
+                }
+            },
+            danger: true
+        });
+    }
+
+    items.push({ label: 'Delete from Database', action: () => deleteTrackFromDatabase(track), danger: true });
 
     items.forEach(({ label, action, danger }) => {
         const row = document.createElement('div');
@@ -1888,6 +1965,95 @@ function showContextMenu(x: number, y: number, track: Track) {
     };
     setTimeout(() => document.addEventListener('click', closeMenu), 0);
 }
+
+function showAddToPlaylistMenu(x: number, y: number, track: any) {
+    document.getElementById('playlist-context-menu')?.remove();
+
+    const menu = document.createElement('div');
+    menu.id = 'playlist-context-menu';
+    menu.className = 'context-menu';
+    menu.style.left = `${x + 10}px`;
+    menu.style.top = `${y + 10}px`;
+
+    // Convert YtTrack to a standard Track format if needed
+    const trackToAdd = track.file_path_or_url ? track : {
+        id: track.id,
+        source_type: 'youtube_stream',
+        file_path_or_url: track.id,
+        title: track.title,
+        artist_name: track.uploader,
+        duration: track.duration,
+        thumbnail: track.thumbnail
+    };
+
+    const physicalPlaylists = playlists.filter(p => !p.folderPath.startsWith('VIRTUAL_'));
+
+    if (physicalPlaylists.length === 0) {
+        menu.innerHTML = `<div class="context-menu-row" style="color: var(--text-faint); pointer-events: none;">No playlists available</div>`;
+    } else {
+        physicalPlaylists.forEach(pl => {
+            const row = document.createElement('div');
+            row.className = 'context-menu-row';
+            row.textContent = pl.name;
+            row.onclick = () => {
+                if (!pl.customTracks) pl.customTracks = [];
+                
+                // Check if already exists
+                if (pl.customTracks.some(t => t.file_path_or_url === trackToAdd.file_path_or_url)) {
+                    showToast('Already in playlist', 'info');
+                } else {
+                    // Save the full object!
+                    pl.customTracks.push(trackToAdd);
+                    savePlaylists();
+                    showToast(`Added to ${pl.name}`, 'success');
+                    
+                    if (isShowingPlaylist && activePlaylistIndex >= 0 && playlists[activePlaylistIndex].folderPath === pl.folderPath) {
+                        displayedTracks = getPlaylistTracks(pl);
+                        renderTracks(displayedTracks, pl.name);
+                    }
+                }
+                menu.remove();
+            };
+            menu.appendChild(row);
+        });
+    }
+
+    const sep = document.createElement('div');
+    sep.className = 'context-menu-sep';
+    menu.appendChild(sep);
+
+    const newRow = document.createElement('div');
+    newRow.className = 'context-menu-row';
+    newRow.textContent = 'Create New Playlist...';
+    newRow.onclick = () => {
+        menu.remove();
+        showRenameModal('New Playlist', (name) => {
+            if (!name || !name.trim()) return;
+            const newPl = { 
+                name: name.trim(), 
+                folderPath: `CUSTOM_${Date.now()}`, 
+                customTracks: [trackToAdd] 
+            };
+            playlists.push(newPl);
+            savePlaylists();
+            renderSidebarPlaylist();
+            showToast(`Created ${newPl.name} and added track`, 'success');
+        });
+    };
+    menu.appendChild(newRow);
+
+    document.body.appendChild(menu);
+
+    const closeMenu = (ev: MouseEvent) => {
+        if (!menu.contains(ev.target as Node)) {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
+}
+
+
 
 async function deleteTrackFromDatabase(track: Track) {
     console.log('[delete] called for:', track.file_path_or_url);
@@ -3217,12 +3383,14 @@ function showQueueItemContextMenu(
             userQueue.push(track);
             refreshQueuePanel();
         });
+        makeRow('Add to Playlist', () => showAddToPlaylistMenu(e.clientX, e.clientY, track));
         makeRow('Remove from Queue', () => {
             removeFromUserQueue(track);
         }, true);
     } else {
         makeRow('Play Next', () => addToQueue(track, true));
         makeRow('Add to Queue', () => addToQueue(track, false));
+        makeRow('Add to Playlist', () => showAddToPlaylistMenu(e.clientX, e.clientY, track));
     }
 
     document.body.appendChild(menu);
@@ -3446,6 +3614,19 @@ if (addFolderBtnEl) {
         } catch (e) {
             console.error('Error picking folder:', e);
         }
+    });
+
+    // Right-click to create a new playlist
+    addFolderBtnEl.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showRenameModal('New Playlist', (name) => {
+            if (!name || !name.trim()) return;
+            const newPl = { name: name.trim(), folderPath: `CUSTOM_${Date.now()}`, customTracks: [] };
+            playlists.push(newPl);
+            savePlaylists();
+            renderSidebarPlaylist();
+            showToast(`Created playlist: ${newPl.name}`, 'success');
+        });
     });
 }
 
@@ -3710,11 +3891,56 @@ if (lyricsBtn) {
             const overlay = document.createElement('div');
             overlay.id = 'lyrics-modal-overlay';
             overlay.className = 'lyrics-fullscreen-overlay';
+
+            // Define the close logic up-front
+            const close = () => {
+                overlay.remove();
+                if (activeLyricsAnimation) cancelAnimationFrame(activeLyricsAnimation);
+                document.removeEventListener('keydown', escHandler);
+            };
+
+            const escHandler = (e: KeyboardEvent) => {
+                if (e.key === 'Escape') close();
+            };
+            document.addEventListener('keydown', escHandler);
             
+            // ── CHECK FOR EMPTY LYRICS ──
+            const hasSynced = data.synced && data.synced.length > 0;
+            
+            // Check if the plain text is empty OR just says "Instrumental"
+            const lowerPlain = (data.plain || '').toLowerCase().trim();
+            const isJustInstrumental = lowerPlain === 'instrumental' || lowerPlain === '[instrumental]';
+            const hasPlain = lowerPlain.length > 0 && !isJustInstrumental;
+            
+            if (!hasSynced && !hasPlain) {
+                // Render a nice "No lyrics" state instead of a blank screen
+                overlay.innerHTML = `
+                    <div class="lyrics-bg" style="background-image: url('${currentTrack.thumbnail || ''}')"></div>
+                    <div class="lyrics-fullscreen-header">
+                        <div class="lyrics-track-info">
+                            <h2>${escapeHtml(currentTrack.title || '')}</h2>
+                            <p>${escapeHtml(currentTrack.artist_name || '')}</p>
+                        </div>
+                        <button class="lyrics-close-btn close-lyrics">✕</button>
+                    </div>
+                    <div class="lyrics-fullscreen-content" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 16px; color: rgba(255, 255, 255, 0.5); font-size: 24px; font-weight: 600;">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5;">
+                            <path d="M9 18V5l12-2v13"></path>
+                            <circle cx="6" cy="18" r="3"></circle>
+                            <circle cx="18" cy="16" r="3"></circle>
+                        </svg>
+                        <p>No lyrics available for this song.</p>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+            }
             // If we have synced lyrics, render the karaoke view
-            if (data.synced && data.synced.length > 0) {
+            else if (hasSynced) {
+                // Capture the array locally so TypeScript knows it won't be null inside the loop
+                const syncedLines = data.synced!;
+                
                 let linesHtml = '';
-                data.synced.forEach((line, index) => {
+                syncedLines.forEach((line, index) => {
                     linesHtml += `<div class="lyrics-line" data-index="${index}" data-time="${line.time_ms}">${escapeHtml(line.text)}</div>`;
                 });
 
@@ -3740,6 +3966,8 @@ if (lyricsBtn) {
                 );
 
                 // Karaoke Sync Loop
+                let lastActiveIndex = -1;
+                
                 const syncLyrics = () => {
                     if (!document.body.contains(overlay)) return; // Stop if closed
                     
@@ -3747,27 +3975,30 @@ if (lyricsBtn) {
                     let activeIndex = -1;
 
                     // Find the current line
-                    for (let i = 0; i < data.synced!.length; i++) {
-                        if (currentTimeMs >= data.synced![i].time_ms) {
+                    for (let i = 0; i < syncedLines.length; i++) {
+                        if (currentTimeMs >= syncedLines[i].time_ms) {
                             activeIndex = i;
                         } else {
                             break;
                         }
                     }
 
-                    // Update UI
-                    lineElements.forEach((el, i) => {
-                        if (i === activeIndex) {
-                            if (!el.classList.contains('active')) {
+                    // Only update the DOM if the active line actually changed
+                    if (activeIndex !== lastActiveIndex) {
+                        lastActiveIndex = activeIndex;
+
+                        lineElements.forEach((el, i) => {
+                            if (i === activeIndex) {
                                 el.classList.add('active');
-                                // Scroll to the middle of the container
+                                
+                                // Smoothly scroll the active line to the center
                                 const offset = el.offsetTop - (scrollContainer.clientHeight / 2) + (el.clientHeight / 2);
                                 scrollContainer.scrollTo({ top: offset, behavior: 'smooth' });
+                            } else {
+                                el.classList.remove('active');
                             }
-                        } else {
-                            el.classList.remove('active');
-                        }
-                    });
+                        });
+                    }
 
                     activeLyricsAnimation = requestAnimationFrame(syncLyrics);
                 };
@@ -3776,7 +4007,13 @@ if (lyricsBtn) {
                 syncLyrics();
 
             } else {
-                // Fallback: Plain text
+                // Fallback: Plain text (split by lines to match synced lyric sizing)
+                const plainLines = data.plain.split('\n').map(line => {
+                    // Preserve empty lines as spacing
+                    if (line.trim() === '') return '<div class="lyrics-line" style="height: 20px;"></div>';
+                    return `<div class="lyrics-line">${escapeHtml(line)}</div>`;
+                }).join('');
+
                 overlay.innerHTML = `
                     <div class="lyrics-bg" style="background-image: url('${currentTrack.thumbnail || ''}')"></div>
                     <div class="lyrics-fullscreen-header">
@@ -3786,16 +4023,14 @@ if (lyricsBtn) {
                         </div>
                         <button class="lyrics-close-btn close-lyrics">✕</button>
                     </div>
-                    <div class="lyrics-fullscreen-content" style="white-space: pre-wrap;">${escapeHtml(data.plain)}</div>
+                    <div class="lyrics-fullscreen-content">
+                        ${plainLines}
+                    </div>
                 `;
                 document.body.appendChild(overlay);
             }
             
-            // Close logic
-            const close = () => {
-                overlay.remove();
-                if (activeLyricsAnimation) cancelAnimationFrame(activeLyricsAnimation);
-            };
+            // Close logic (listeners)
             overlay.querySelector('.close-lyrics')?.addEventListener('click', close);
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) close();
@@ -4419,9 +4654,10 @@ function openVinylMode() {
                             <g transform="translate(-4 44) rotate(20)">
                                 <rect x="-1.3" y="-1" width="2.6" height="2.6" rx="0.5" fill="url(#va-metal)"/>
                                 <rect x="-2.1" y="1.2" width="4.2" height="5.6" rx="0.9" fill="url(#va-metal)" stroke="#6a6e72" stroke-width="0.2"/>
-                                <rect x="1.6" y="2.6" width="3.4" height="0.55" rx="0.27" fill="#aeb1b4" stroke="#6a6e72" stroke-width="0.12"/>
-                                <rect x="-1.7" y="6.4" width="3.4" height="1.7" rx="0.4" fill="#1f2022"/>
-                                <rect x="-1.7" y="6.4" width="0.8" height="1.7" fill="var(--accent, #ff3b30)"/>
+                                <!-- Dark Cartridge Body -->
+                                <rect x="-1.8" y="6.4" width="3.6" height="1.0" rx="0.3" fill="#111"/>
+                                <!-- Thin Accent Line (Top edge indicator) -->
+                                <rect x="-1.6" y="7.0" width="3.2" height="0.15" fill="var(--accent, #ff3b30)" opacity="0.9"/>                            
                             </g>
                         </svg>
                     </div>
@@ -4503,65 +4739,93 @@ function openVinylMode() {
     let trackKey = '';
     function syncMetadata() {
         if (!currentTrack) return;
-        const key = `${currentTrack.title}|${currentTrack.artist_name}|${currentTrack.thumbnail}`;
+        
+        // Capture a local reference so TypeScript knows it won't be null inside the timeout
+        const track = currentTrack;
+        
+        const key = `${track.title}|${track.artist_name}|${track.thumbnail}`;
         if (key === trackKey) return;
         trackKey = key;
 
+        // If this is the first load, don't animate. Only animate if changing.
+        const isChanging = trackKey !== ''; 
+        
         const { main, tag } = splitVinylTitle(currentTrack.title || 'Unknown Title');
-        titleEl.textContent = main;
-        titleEl.title = currentTrack.title || '';
-        titleEl.classList.toggle('vinyl-title--md', main.length > 10 && main.length <= 22);
-        titleEl.classList.toggle('vinyl-title--lg', main.length > 22);
+        
+        const updateUI = () => {
+            // Use the captured local 'track' variable instead of 'currentTrack'
+            titleEl.textContent = main;
+            titleEl.title = track.title || '';
+            titleEl.classList.toggle('vinyl-title--md', main.length > 10 && main.length <= 22);
+            titleEl.classList.toggle('vinyl-title--lg', main.length > 22);
 
-        tagEl.textContent = tag;
-        tagEl.title = tag;
-        tagEl.hidden = !tag;
+            tagEl.textContent = tag;
+            tagEl.title = tag;
+            tagEl.hidden = !tag;
 
-        artistEl.textContent = currentTrack.artist_name || 'Unknown Artist';
-        artistEl.title = artistEl.textContent;
+            artistEl.textContent = track.artist_name || 'Unknown Artist';
+            artistEl.title = artistEl.textContent;
 
-        // Reset record color to default dark vinyl
-        recordEl.style.background = 'radial-gradient(circle closest-side, #171717 0 50%, #0a0a0a 50.5% 100%)';
+            // Reset record color to default dark vinyl
+            recordEl.style.background = 'radial-gradient(circle closest-side, #171717 0 50%, #0a0a0a 50.5% 100%)';
 
-        if (currentTrack.thumbnail) {
-            const url = `url("${String(currentTrack.thumbnail).replace(/"/g, '%22')}")`;
-            labelEl.style.backgroundImage = url;
-            bgEl.style.backgroundImage = url;
-            bgEl.classList.add('is-on');
+            if (track.thumbnail) {
+                const url = `url("${String(track.thumbnail).replace(/"/g, '%22')}")`;
+                labelEl.style.backgroundImage = url;
+                bgEl.style.backgroundImage = url;
+                bgEl.classList.add('is-on');
 
-            // Extract dominant color from album art
-            const img = new Image();
-            img.crossOrigin = "Anonymous";
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = 10; canvas.height = 10;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) return;
-                ctx.drawImage(img, 0, 0, 10, 10);
-                const data = ctx.getImageData(0, 0, 10, 10).data;
-                
-                let r = 0, g = 0, b = 0, count = 0;
-                // Skip the first and last few pixels (often just background or borders)
-                for (let i = 16; i < data.length - 16; i += 4) {
-                    if (data[i + 3] > 200) { // Only opaque pixels
-                        r += data[i]; g += data[i + 1]; b += data[i + 2]; count++;
+                // Extract dominant color from album art
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 10; canvas.height = 10;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return;
+                    ctx.drawImage(img, 0, 0, 10, 10);
+                    const data = ctx.getImageData(0, 0, 10, 10).data;
+                    
+                    let r = 0, g = 0, b = 0, count = 0;
+                    for (let i = 16; i < data.length - 16; i += 4) {
+                        if (data[i + 3] > 200) { 
+                            r += data[i]; g += data[i + 1]; b += data[i + 2]; count++;
+                        }
                     }
-                }
-                if (count === 0) return;
+                    if (count === 0) return;
+                    
+                    r = Math.floor(r / count); g = Math.floor(g / count); b = Math.floor(b / count);
+                    const mix = (c: number) => Math.floor(c * 0.35); 
+                    
+                    recordEl.style.background = `radial-gradient(circle closest-side, rgba(${mix(r)}, ${mix(g)}, ${mix(b)}, 1) 0 50%, rgba(${mix(r)}, ${mix(g)}, ${mix(b)}, 0.6) 50.5% 100%)`;
+                };
+                img.src = track.thumbnail;
+            } else {
+                labelEl.style.backgroundImage = 'none';
+                bgEl.classList.remove('is-on');
+            }
+        };
+
+        if (isChanging) {
+            // 1. Fade the current record out (JS loop keeps it spinning)
+            recordEl.classList.add('changing-out');
+            
+            // 2. Wait for the fade-out to finish, then swap metadata
+            setTimeout(() => {
+                updateUI();
                 
-                // Get average color
-                r = Math.floor(r / count); g = Math.floor(g / count); b = Math.floor(b / count);
-                
-                // Darken it significantly so it looks like colored vinyl
-                const mix = (c: number) => Math.floor(c * 0.35); 
-                
-                // Apply a radial gradient using the extracted color
-                recordEl.style.background = `radial-gradient(circle closest-side, rgba(${mix(r)}, ${mix(g)}, ${mix(b)}, 1) 0 50%, rgba(${mix(r)}, ${mix(g)}, ${mix(b)}, 0.6) 50.5% 100%)`;
-            };
-            img.src = currentTrack.thumbnail;
+                // 3. Fade the new record in
+                recordEl.classList.remove('changing-out');
+                recordEl.classList.add('changing-in');
+
+                // 4. Cleanup
+                setTimeout(() => {
+                    recordEl.classList.remove('changing-in');
+                }, 500);
+            }, 400);
         } else {
-            labelEl.style.backgroundImage = 'none';
-            bgEl.classList.remove('is-on');
+            // First load: just update instantly
+            updateUI();
         }
     }
 
@@ -4574,6 +4838,12 @@ function openVinylMode() {
         deckBtn.classList.toggle('is-on', playing);
         powerEl.classList.toggle('is-on', playing);
         ledEl.classList.toggle('is-on', playing);
+
+        // If playback stopped (e.g., queue cleared), force stop the spin
+        if (!playing && (!currentTrack || !audio.src)) {
+            const recordEl = document.getElementById('vinyl-record') as HTMLElement;
+            if (recordEl) recordEl.style.transform = `rotate(0deg)`; // Snap to stop
+        }
     }
 
     // ── Volume fader ──
@@ -4726,3 +4996,153 @@ function openVinylMode() {
 
     requestAnimationFrame(() => overlay.classList.add('vinyl-overlay--visible'));
 }
+
+// ==========================================
+// App Tour (Onboarding)
+// ==========================================
+const TOUR_STEPS = [
+    {
+        targetId: '.search-bar',
+        title: 'Search Anything',
+        text: 'Type here to instantly search your local library or stream millions of songs from YouTube.',
+        position: 'bottom'
+    },
+    {
+        targetId: '#add-folder-btn',
+        title: 'Local Music & Playlists',
+        text: 'Click here to add folders from your computer. Right-click it to create an empty custom playlist.',
+        position: 'bottom'
+    },
+    {
+        targetId: '.album-card',
+        title: 'Manage Your Music',
+        text: 'Right-click any song or drag it into a playlist to add it. You can also right-click to remove songs from custom playlists.',
+        position: 'bottom'
+    },
+    {
+        targetId: '#btn-lyrics',
+        title: 'Live Lyrics',
+        text: 'Click here to fetch synced, karaoke-style lyrics for the current song.',
+        position: 'top'
+    },
+    {
+        targetId: '.now-playing .album-art',
+        title: 'Vinyl Mode',
+        text: 'Click the album art while a song is playing to enter immersive Vinyl Mode.',
+        position: 'right'
+    }
+];
+
+function startAppTour() {
+    let currentStep = 0;
+    
+    // Create the overlay container
+    const tourOverlay = document.createElement('div');
+    tourOverlay.className = 'tour-overlay';
+    tourOverlay.id = 'app-tour';
+    
+    const spotlight = document.createElement('div');
+    spotlight.className = 'tour-spotlight';
+    
+    const tooltip = document.createElement('div');
+    tooltip.className = 'tour-tooltip';
+    
+    tourOverlay.appendChild(spotlight);
+    tourOverlay.appendChild(tooltip);
+    document.body.appendChild(tourOverlay);
+
+    function renderStep() {
+        if (currentStep >= TOUR_STEPS.length) {
+            finishTour();
+            return;
+        }
+
+        const step = TOUR_STEPS[currentStep];
+        const targetEl = document.querySelector(step.targetId);
+
+        if (!targetEl) {
+            // If element doesn't exist (e.g. no track playing), skip to next
+            currentStep++;
+            renderStep();
+            return;
+        }
+
+        // Get element position
+        const rect = targetEl.getBoundingClientRect();
+        const padding = 8;
+
+        // Move spotlight
+        spotlight.style.top = `${rect.top - padding}px`;
+        spotlight.style.left = `${rect.left - padding}px`;
+        spotlight.style.width = `${rect.width + padding * 2}px`;
+        spotlight.style.height = `${rect.height + padding * 2}px`;
+
+        // Setup tooltip content
+        tooltip.innerHTML = `
+            <h3>${step.title}</h3>
+            <p>${step.text}</p>
+            <div class="tour-footer">
+                <span class="tour-progress">${currentStep + 1} of ${TOUR_STEPS.length}</span>
+                <div class="tour-actions">
+                    ${currentStep > 0 ? '<button class="tour-btn tour-btn--prev">Back</button>' : ''}
+                    <button class="tour-btn tour-btn--next">Next</button>
+                </div>
+            </div>
+        `;
+
+        // Position tooltip
+        let top = 0;
+        let left = 0;
+        
+        if (step.position === 'bottom') {
+            top = rect.bottom + 16;
+            left = rect.left + (rect.width / 2) - 140; // Center it
+        } else if (step.position === 'top') {
+            top = rect.top - 160; // Approximate height
+            left = rect.left + (rect.width / 2) - 140;
+        } else if (step.position === 'right') {
+            top = rect.top;
+            left = rect.right + 16;
+        }
+
+        // Keep tooltip on screen
+        top = Math.max(16, Math.min(top, window.innerHeight - 200));
+        left = Math.max(16, Math.min(left, window.innerWidth - 300));
+
+        tooltip.style.top = `${top}px`;
+        tooltip.style.left = `${left}px`;
+
+        // Add event listeners
+        tooltip.querySelector('.tour-btn--next')?.addEventListener('click', () => {
+            currentStep++;
+            renderStep();
+        });
+        
+        tooltip.querySelector('.tour-btn--prev')?.addEventListener('click', () => {
+            currentStep--;
+            renderStep();
+        });
+    }
+
+    function finishTour() {
+        localStorage.setItem('audos_tour_completed', 'true');
+        tourOverlay.classList.add('tour-overlay--closing');
+        setTimeout(() => tourOverlay.remove(), 300);
+    }
+
+    // Wait a brief moment for the UI to settle before starting
+    setTimeout(() => {
+        renderStep();
+        tourOverlay.classList.add('tour-overlay--visible');
+    }, 500);
+}
+
+// Trigger tour on first launch
+window.addEventListener('DOMContentLoaded', () => {
+    // Check after a delay to ensure splash screen is gone
+    setTimeout(() => {
+        if (!localStorage.getItem('audos_tour_completed')) {
+            startAppTour();
+        }
+    }, 3000); 
+});

@@ -3,8 +3,7 @@
    Every visual value lives in :root. Themes override tokens.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&display=swap');
-
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;600;800;900&family=Mukta:wght@600;800&display=swap');
 /* ============================================================
    1. DESIGN TOKENS — the theme entry point
    ============================================================ */
@@ -2600,7 +2599,7 @@ body.is-dragging #main-view { background: var(--panel-strong); }
 }
 
 .lyrics-track-info h2 {
-    font-family: var(--font-body);
+    font-family: "Mukta", "Outfit", sans-serif;
     font-size: 28px;
     font-weight: 800;
     color: #fff;
@@ -2658,26 +2657,53 @@ body.is-dragging #main-view { background: var(--panel-strong); }
 
 /* The Lyrics Text */
 .lyrics-line {
-    font-family: var(--font-body);
-    font-size: clamp(28px, 4vw, 54px); /* Massive dynamic font size */
-    font-weight: 800;
-    line-height: 1.2;
-    color: rgba(255, 255, 255, 0.25);
-    transition: all 0.4s cubic-bezier(0.2, 0, 0, 1);
-    transform-origin: left center;
+    /* Use Mukta for Hindi, Outfit for English */
+    font-family: "Mukta", "Outfit", -apple-system, sans-serif; 
+    
+    font-weight: 800; 
+    font-size: clamp(24px, 3.5vw, 48px); 
+    line-height: 1.4;
+    
+    color: #ffffff;
+    opacity: 0.25; 
+    
+    transition: opacity 0.3s ease, transform 0.3s ease;
     cursor: default;
     text-wrap: balance;
+    
+    transform: translateZ(0);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-kerning: none; 
 }
 
 .lyrics-line.active {
-    color: #fff;
-    transform: scale(1.02);
-    text-shadow: 0 4px 24px rgba(255, 255, 255, 0.15);
+    /* Keep solid white, just turn the opacity up */
+    color: #ffffff;
+    opacity: 1;
+}
+
+/* Plain text fallback */
+.lyrics-line:not([data-time]) {
+    opacity: 0.9;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+/* Ensure lines aren't too dark */
+.lyrics-fullscreen-content {
+    padding: 30vh 15vw; /* Increased top/bottom padding for better centering */
 }
 
 /* Empty lines should just act as spacing */
 .lyrics-line:empty {
     height: 20px;
+}
+/* Plain text fallback styling */
+.lyrics-fullscreen-content:not(:has(.lyrics-line[data-time])) .lyrics-line {
+    color: rgba(255, 255, 255, 0.9);
+    transform: none; /* Disable the scale effect */
+    text-align: center;
 }
 
 /* ============================================================
@@ -2781,20 +2807,22 @@ body.is-dragging #main-view { background: var(--panel-strong); }
     flex-shrink: 0;
 }
 
-/* Dark Brushed Metal */
+/* Silver Brushed Metal */
 .vinyl-deck {
     position: absolute;
     inset: 0;
     border-radius: calc(var(--u) * 1.2);
     overflow: hidden;
     background:
-        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0px, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 3px),
-        linear-gradient(135deg, #1f2022 0%, #343538 25%, #1f2022 50%, #343538 75%, #1f2022 100%);
+        /* The subtle horizontal brushed texture */
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.15) 0px, rgba(255, 255, 255, 0.15) 1px, transparent 1px, transparent 3px),
+        /* The silver metallic gradient sweep */
+        linear-gradient(135deg, #b8babd 0%, #e8eaec 25%, #a4a6a8 50%, #f0f2f4 75%, #9a9c9e 100%);
     box-shadow:
-        0 30px 60px rgba(0, 0, 0, 0.8),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.1),
-        inset 0 0 40px rgba(0, 0, 0, 0.6);
-    border: 1px solid #111;
+        0 30px 60px rgba(0, 0, 0, 0.4),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.6),
+        inset 0 0 40px rgba(0, 0, 0, 0.1);
+    border: 1px solid #888;
 }
 
 /* Small printed labels */
@@ -2806,7 +2834,8 @@ body.is-dragging #main-view { background: var(--panel-strong); }
     font-size: max(6px, calc(var(--u) * 1.2));
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--text-dim);
+    /* Dark grey labels so they are readable on silver */
+    color: #444;
     white-space: nowrap;
     pointer-events: none;
 }
@@ -3004,19 +3033,6 @@ body.is-dragging #main-view { background: var(--panel-strong); }
     border-radius: 50%;
     background: linear-gradient(145deg, #7d8083, #e9eaeb 60%, #a9abae);
     box-shadow: inset 0 0 0 calc(var(--u) * 0.3) rgba(0, 0, 0, 0.18), inset 0 calc(var(--u) * 0.5) calc(var(--u) * 1) rgba(0, 0, 0, 0.25);
-}
-/* little lever on the cup */
-.vinyl-arm-base::after {
-    content: "";
-    position: absolute;
-    left: 14%;
-    top: 24%;
-    width: 16%;
-    height: 8%;
-    border-radius: 2px;
-    background: linear-gradient(180deg, #f3f3f3, #8d8f91);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    transform: rotate(-24deg);
 }
 
 /* ── Tonearm (SVG; anchored on the pivot, JS rotates it) ── */
@@ -3314,4 +3330,164 @@ body.is-dragging #main-view { background: var(--panel-strong); }
     .vinyl-title { font-size: 40px; -webkit-line-clamp: 2; line-clamp: 2; }
     .vinyl-title--md { font-size: 34px; }
     .vinyl-title--lg { font-size: 28px; }
+}
+/* ============================================================
+   19. VINYL RECORD CHANGE ANIMATION
+   ============================================================ */
+
+/* Slide left→right with a fade. The JS rAF loop is paused while
+   either .changing-out or .changing-in is present (see main.ts),
+   so these keyframes fully own transform during the swap and
+   there's no stutter. */
+@keyframes recordSlideOut {
+    0%   { transform: translateX(0)    rotate(0deg);   opacity: 1; }
+    100% { transform: translateX(160%) rotate(90deg);  opacity: 0; }
+}
+
+@keyframes recordSlideIn {
+    0%   { transform: translateX(-160%) rotate(-90deg); opacity: 0; }
+    100% { transform: translateX(0)     rotate(0deg);   opacity: 1; }
+}
+
+.vinyl-record.changing-out {
+    animation: recordSlideOut 400ms cubic-bezier(0.4, 0, 1, 1) forwards;
+    pointer-events: none;
+}
+
+.vinyl-record.changing-in {
+    animation: recordSlideIn 500ms cubic-bezier(0, 0, 0.2, 1) forwards;
+    pointer-events: none;
+}
+
+
+/* ============================================================
+   16. APP TOUR (ONBOARDING)
+   ============================================================ */
+
+.tour-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100000; /* Higher than everything except splash */
+    pointer-events: none; /* Let clicks pass through to the cutout */
+    opacity: 0;
+    transition: opacity 300ms var(--ease);
+}
+
+.tour-overlay--visible { opacity: 1; }
+.tour-overlay--closing { opacity: 0; }
+
+.tour-spotlight {
+    position: absolute;
+    border-radius: 8px;
+    transition: all 0.4s cubic-bezier(0.2, 0, 0, 1);
+    /* The magic trick: a massive shadow darkens the screen, but the element inside stays clear */
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.tour-tooltip {
+    position: absolute;
+    width: 280px;
+    background: var(--paper);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+    pointer-events: auto; /* Tooltip needs to be clickable */
+    z-index: 2;
+    transition: all 0.4s cubic-bezier(0.2, 0, 0, 1);
+    color: var(--text);
+    font-family: var(--font-body);
+}
+
+.tour-tooltip h3 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.tour-tooltip p {
+    margin: 0 0 20px 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-dim);
+}
+
+.tour-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+}
+
+.tour-progress {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    letter-spacing: 0.05em;
+}
+
+.tour-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.tour-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+    padding: 6px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 150ms var(--ease);
+}
+
+.tour-btn:hover {
+    background: var(--panel-strong);
+    color: var(--text);
+}
+
+.tour-btn--next {
+    background: var(--text);
+    color: var(--bg);
+    border-color: var(--text);
+}
+
+.tour-btn--next:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+/* ============================================================
+   17. DRAG & DROP HIGHLIGHTS
+   ============================================================ */
+
+/* Highlight the playlist item when a track is dragged over it */
+.list-item.drop-hover {
+    background-color: var(--accent-bg-faint) !important;
+    border-left: 3px solid var(--accent) !important;
+    border-radius: var(--radius);
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: all 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Optional: Dim the dragged item slightly */
+body.is-dragging .list-item {
+    transition: background 200ms ease, transform 200ms ease, border 200ms ease;
+}
+
+/* Glow effect on the main track list when dragging over a playlist */
+.track-list.drop-hover {
+    background-color: var(--accent-bg-faint) !important;
+    outline: 2px dashed var(--accent);
+    outline-offset: -2px;
+    border-radius: var(--radius-md);
 }
