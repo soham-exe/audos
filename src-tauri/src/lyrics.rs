@@ -365,7 +365,8 @@ async fn fetch_custom_db(client: &Client, title: &str, artist: &str) -> Option<L
 
     let cache_dir = dirs::cache_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("audos");
+        .join("audos")
+        .join("lyrics_cache");
     let _ = fs::create_dir_all(&cache_dir);
     let cache_json = cache_dir.join("lyrics_db.json");
     let cache_sig  = cache_dir.join("lyrics_db.json.sig");
