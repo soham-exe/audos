@@ -60,5 +60,5 @@ signing = []
 
 [[bin]]
 name = "sign_helper"
-path = "src/bin/sign_helper.rs"
+path = "src/tools/sign_helper.rs"
 required-features = ["signing"]
