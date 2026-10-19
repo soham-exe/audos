@@ -52,6 +52,24 @@ pub fn run() {
                 }
             }
 
+            // ── Cleanup legacy sign_helper.exe ──
+            // If the user installed an older version where Tauri bundled the helper,
+            // we delete it on startup so it doesn't sit in their install dir.
+            if let Ok(exe_path) = std::env::current_exe() {
+                if let Some(exe_dir) = exe_path.parent() {
+                    #[cfg(target_os = "windows")]
+                    let helper_name = "sign_helper.exe";
+                    #[cfg(not(target_os = "windows"))]
+                    let helper_name = "sign_helper";
+
+                    let helper_path = exe_dir.join(helper_name);
+                    if helper_path.exists() {
+                        let _ = std::fs::remove_file(&helper_path);
+                        println!("[setup] Removed legacy sign_helper from install dir.");
+                    }
+                }
+            }
+
             let app_dir = app.path().app_data_dir().expect("no app data dir");
             let conn = db::init_db(&app_dir).expect("db init failed");
 
