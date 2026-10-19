@@ -102,6 +102,7 @@ pub fn run() {
             home_feed::set_user_region,
             radio::fetch_related_tracks,
             lyrics::fetch_lyrics,
+            lyrics::report_missing_lyrics,
             yt_bridge::find_alternative,
             get_proxy_port,
             is_yt_dlp_ready,

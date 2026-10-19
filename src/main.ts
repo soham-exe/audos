@@ -2574,7 +2574,10 @@ if (prevBtn) {
         // Standard: restart if we're past the 3s mark
         if (audio.currentTime > 3) {
             audio.currentTime = 0;
-            audio.play();
+            // Only resume playing if it was already playing
+            if (isPlaying) {
+                audio.play();
+            }
             return;
         }
 
@@ -3683,20 +3686,30 @@ if (lyricsBtn) {
         document.getElementById('lyrics-modal-overlay')?.remove();
         if (activeLyricsAnimation) cancelAnimationFrame(activeLyricsAnimation);
 
+        // ── OFFLINE CHECK ──
+        if (!isOnline) {
+            // If we're offline, only show lyrics if they are cached in the frontend
+            // (Since we don't have a frontend lyrics cache yet, we just show a warning)
+            showToast('You are offline. Connect to the internet to fetch lyrics.', 'error', 4000);
+            return;
+        }
+        // ───────────────────
+
         showToast('Fetching lyrics...', 'info', 2000);
 
         try {
             const data = await invoke<LyricsData>('fetch_lyrics', {
                 title: currentTrack.title || '',
                 artist: currentTrack.artist_name || 'Unknown',
-                duration: currentTrack.duration || 0
+                duration: currentTrack.duration || 0,
+                currentTime: Math.floor(audio.currentTime * 1000) // Pass current playback position in ms
             });
 
             showToast(`Lyrics from ${data.source}`, 'info', 1800);
 
             const overlay = document.createElement('div');
             overlay.id = 'lyrics-modal-overlay';
-            overlay.className = 'modal-overlay';
+            overlay.className = 'lyrics-fullscreen-overlay';
             
             // If we have synced lyrics, render the karaoke view
             if (data.synced && data.synced.length > 0) {
@@ -3706,17 +3719,16 @@ if (lyricsBtn) {
                 });
 
                 overlay.innerHTML = `
-                    <div class="modal-card lyrics-modal">
-                        <div class="lyrics-header">
-                            <div>
-                                <h3>${escapeHtml(currentTrack.title || '')}</h3>
-                                <p>${escapeHtml(currentTrack.artist_name || '')}</p>
-                            </div>
-                            <button class="modal-btn modal-btn--primary close-lyrics">Close</button>
+                    <div class="lyrics-bg" style="background-image: url('${currentTrack.thumbnail || ''}')"></div>
+                    <div class="lyrics-fullscreen-header">
+                        <div class="lyrics-track-info">
+                            <h2>${escapeHtml(currentTrack.title || '')}</h2>
+                            <p>${escapeHtml(currentTrack.artist_name || '')}</p>
                         </div>
-                        <div class="lyrics-content lyrics-content--synced" id="lyrics-scroll-container">
-                            ${linesHtml}
-                        </div>
+                        <button class="lyrics-close-btn close-lyrics">✕</button>
+                    </div>
+                    <div class="lyrics-fullscreen-content" id="lyrics-scroll-container">
+                        ${linesHtml}
                     </div>
                 `;
 
@@ -3766,16 +3778,15 @@ if (lyricsBtn) {
             } else {
                 // Fallback: Plain text
                 overlay.innerHTML = `
-                    <div class="modal-card lyrics-modal">
-                        <div class="lyrics-header">
-                            <div>
-                                <h3>${escapeHtml(currentTrack.title || '')}</h3>
-                                <p>${escapeHtml(currentTrack.artist_name || '')}</p>
-                            </div>
-                            <button class="modal-btn modal-btn--primary close-lyrics">Close</button>
+                    <div class="lyrics-bg" style="background-image: url('${currentTrack.thumbnail || ''}')"></div>
+                    <div class="lyrics-fullscreen-header">
+                        <div class="lyrics-track-info">
+                            <h2>${escapeHtml(currentTrack.title || '')}</h2>
+                            <p>${escapeHtml(currentTrack.artist_name || '')}</p>
                         </div>
-                        <div class="lyrics-content">${escapeHtml(data.plain).replace(/\n/g, '<br>')}</div>
+                        <button class="lyrics-close-btn close-lyrics">✕</button>
                     </div>
+                    <div class="lyrics-fullscreen-content" style="white-space: pre-wrap;">${escapeHtml(data.plain)}</div>
                 `;
                 document.body.appendChild(overlay);
             }
@@ -3791,7 +3802,48 @@ if (lyricsBtn) {
             });
 
         } catch (e) {
-            showToast(`Lyrics error: ${e}`, 'error', 5000);
+            // Show a modal with a report button
+            document.getElementById('lyrics-modal-overlay')?.remove();
+            
+            const overlay = document.createElement('div');
+            overlay.id = 'lyrics-modal-overlay';
+            overlay.className = 'modal-overlay';
+            overlay.innerHTML = `
+                <div class="modal-card lyrics-modal" style="padding: 32px; text-align: center; display: flex; flex-direction: column; align-items: center;">
+                    <h3 style="margin-bottom: 12px; font-family: var(--font-body);">No Lyrics Found</h3>
+                    <p style="color: var(--text-dim); margin-bottom: 24px; max-width: 300px;">We couldn't find lyrics for this track across any of our sources.</p>
+                    <div style="display: flex; gap: 12px; justify-content: center; width: 100%;">
+                        <button class="modal-btn close-lyrics">Close</button>
+                        <button class="modal-btn modal-btn--primary" id="report-lyrics-btn">Report & Add to DB</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            
+            overlay.querySelector('.close-lyrics')?.addEventListener('click', () => overlay.remove());
+            overlay.addEventListener('click', (ev) => {
+                if (ev.target === overlay) overlay.remove();
+            });
+            
+            overlay.querySelector('#report-lyrics-btn')?.addEventListener('click', async (ev) => {
+                const btn = ev.target as HTMLButtonElement;
+                btn.textContent = 'Reporting...';
+                btn.disabled = true;
+                
+                try {
+                    await invoke('report_missing_lyrics', {
+                        title: currentTrack?.title || '',
+                        artist: currentTrack?.artist_name || ''
+                    });
+                    btn.textContent = 'Reported!';
+                    showToast('Report sent! Lyrics will be added automatically.', 'success', 4000);
+                    setTimeout(() => overlay.remove(), 1500);
+                } catch (err) {
+                    btn.textContent = 'Failed';
+                    showToast(`Report failed: ${err}`, 'error', 4000);
+                    btn.disabled = false;
+                }
+            });
         }
     });
 }

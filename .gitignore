@@ -34,3 +34,5 @@ RELEASING.md
 documentation.txt
 scripts/
 desktop.ini
+
+.env
